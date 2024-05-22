@@ -1,0 +1,12 @@
+{
+  "name": "contracts-hooks",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "prepare": "rm -rf lib/ && forge install --no-git foundry-rs/forge-std@v1.8.0 Uniswap/v4-core || echo '' "
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
