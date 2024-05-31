@@ -9,9 +9,7 @@ import {Hooks} from "v4-core/libraries/Hooks.sol";
 import {BeforeSwapDelta, toBeforeSwapDelta} from "v4-core/types/BeforeSwapDelta.sol";
 import {BaseHook} from "./univ4/BaseHook.sol";
 
-contract DAMM {
-// contract DAMM is BaseHook {
-
+contract DAMM is BaseHook {
 
     using CurrencySettleTake for Currency;
 
@@ -24,7 +22,46 @@ contract DAMM {
         address sender;
     }
 
-    constructor(IPoolManager poolManager){}
-    // constructor(IPoolManager poolManager) BaseHook(poolManager) {}
+    constructor(IPoolManager poolManager) BaseHook(poolManager) {
+        
+    }
+
+    // balanced liquidity in the pool, increase the amplifier ( the slippage is minimum) and the curve tries to mimic the Constant Price Model curve
+    // but when the liquidity is imbalanced, decrease the amplifier  the slippage approaches infinity and the curve tries to mimic the Uniswap Constant Product Curve
+    function getHookPermissions()
+        public
+        pure
+        override
+        returns (Hooks.Permissions memory)
+    {
+        return
+            Hooks.Permissions({
+                beforeInitialize: false,
+                afterInitialize: false,
+                beforeAddLiquidity: true, // Don't allow normally adding liquidity 
+                afterAddLiquidity: false,
+                beforeRemoveLiquidity: false,
+                afterRemoveLiquidity: false,
+                beforeSwap: true, // Override how swaps are done
+                afterSwap: false,
+                beforeDonate: false,
+                afterDonate: false,
+                beforeSwapReturnDelta: true, // Allow beforeSwap to return a custom delta
+                afterSwapReturnDelta: false,
+                afterAddLiquidityReturnDelta: false,
+                afterRemoveLiquidityReturnDelta: false
+            });
+    }
+
+    // Disable adding liquidity through the PM
+    function beforeAddLiquidity(
+        address,
+        PoolKey calldata,
+        IPoolManager.ModifyLiquidityParams calldata,
+        bytes calldata
+    ) external pure override returns (bytes4) {
+        revert AddLiquidityThroughHook();
+    }
+
 
 }
