@@ -1,5 +1,6 @@
 # Compiler files
 cache/
+node_modules
 out/
 
 # Ignores development broadcast logs
