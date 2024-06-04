@@ -8,7 +8,6 @@ import {AmplificationUtilsV2} from "@main/AmplificationUtilsV2.sol";
 import {LPTokenV2} from "@main/LPTokenV2.sol";
 import {MathUtilsV1} from  "@main/MathUtilsV1.sol";
 
-
 /**
  * @title SwapUtils library
  * @notice A library to be used within Swap.sol. Contains functions responsible for custody and AMM functionalities.
@@ -66,6 +65,7 @@ library SwapUtilsV2 {
         uint256 futureA;
         uint256 initialATime;
         uint256 futureATime;
+
         // fee calculation
         uint256 swapFee;
         uint256 adminFee;
@@ -669,6 +669,8 @@ library SwapUtilsV2 {
         uint256 minDy
     ) external returns (uint256) {
         {
+            // to do: change to univ4/6909 sette/take functionality
+            
             IERC20 tokenFrom = self.pooledTokens[tokenIndexFrom];
             require(
                 dx <= tokenFrom.balanceOf(msg.sender),
@@ -752,6 +754,7 @@ library SwapUtilsV2 {
                 "Must supply all tokens in pool"
             );
 
+            // to do: change to univ4/6909 sette/take functionality
             // Transfer tokens first to see if a fee was charged on transfer
             if (amounts[i] != 0) {
                 uint256 beforeBalance = pooledTokens[i].balanceOf(
@@ -853,6 +856,7 @@ library SwapUtilsV2 {
             totalSupply
         );
 
+        // to do: change to univ4/6909 sette/take functionality
         for (uint256 i = 0; i < amounts.length; i++) {
             require(amounts[i] >= minAmounts[i], "amounts[i] < minAmounts[i]");
             self.balances[i] = balances[i] - amounts[i];
