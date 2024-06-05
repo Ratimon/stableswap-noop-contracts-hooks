@@ -8,6 +8,9 @@ import {AmplificationUtilsV2} from "@main/AmplificationUtilsV2.sol";
 import {LPTokenV2} from "@main/LPTokenV2.sol";
 import {MathUtilsV1} from  "@main/MathUtilsV1.sol";
 
+import {PoolKey} from "v4-core/types/PoolKey.sol";
+
+
 /**
  * @title SwapUtils library
  * @notice A library to be used within Swap.sol. Contains functions responsible for custody and AMM functionalities.
@@ -79,6 +82,8 @@ library SwapUtilsV2 {
         // the pool balance of each token, in the token's precision
         // the contract's actual token balance might differ
         uint256[] balances;
+
+        PoolKey poolKey;
     }
 
     // Struct storing variables used in calculations in the
@@ -670,7 +675,7 @@ library SwapUtilsV2 {
     ) external returns (uint256) {
         {
             // to do: change to univ4/6909 sette/take functionality
-            
+
             IERC20 tokenFrom = self.pooledTokens[tokenIndexFrom];
             require(
                 dx <= tokenFrom.balanceOf(msg.sender),
@@ -757,9 +762,13 @@ library SwapUtilsV2 {
             // to do: change to univ4/6909 sette/take functionality
             // Transfer tokens first to see if a fee was charged on transfer
             if (amounts[i] != 0) {
+
                 uint256 beforeBalance = pooledTokens[i].balanceOf(
                     address(this)
                 );
+
+                
+
                 pooledTokens[i].safeTransferFrom(
                     msg.sender,
                     address(this),

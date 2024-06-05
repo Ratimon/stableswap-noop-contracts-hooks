@@ -2,6 +2,9 @@
 pragma solidity =0.8.25;
 
 import {IPoolManager} from "v4-core/interfaces/IPoolManager.sol";
+import {IHooks} from "v4-core/interfaces/IHooks.sol";
+
+
 import {PoolKey} from "v4-core/types/PoolKey.sol";
 import {Currency} from "v4-core/types/Currency.sol";
 import {CurrencySettleTake} from "v4-core/libraries/CurrencySettleTake.sol";
@@ -14,20 +17,24 @@ import {Clones} from "@openzeppelin/contracts/proxy/Clones.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import {Pausable} from "@openzeppelin/contracts/security/Pausable.sol";
 
+// import {LPTokenV2} from "@main/LPTokenV2.sol";
 import {SwapUtilsV2, LPTokenV2} from "@main/SwapUtilsV2.sol";
 import {AmplificationUtilsV2} from  "@main/AmplificationUtilsV2.sol";
 
-contract DAMM is BaseHook {
+contract DAMM is BaseHook, ReentrancyGuard, Pausable {
 
     using CurrencySettleTake for Currency;
 
     using SafeERC20 for IERC20;
+    // to do : remove scatch work
     using SwapUtilsV2 for SwapUtilsV2.Swap;
     using AmplificationUtilsV2 for SwapUtilsV2.Swap;
 
     // Struct storing data responsible for automatic market maker functionalities. In order to
     // access this data, this contract uses SwapUtils library. For more details, see SwapUtils.sol
     SwapUtilsV2.Swap public swapStorage;
+
+    PoolKey  public poolKey;
 
     // Maps token address to an index in the pool. Used to prevent duplicate tokens in the pool.
     // getTokenIndex function also relies on this mapping to retrieve token index.
@@ -36,7 +43,8 @@ contract DAMM is BaseHook {
     error AddLiquidityThroughHook();
 
     struct CallbackData {
-        uint256 amountEach;
+        uint256 amount0;
+        uint256 amount1;
         Currency currency0;
         Currency currency1;
         address sender;
@@ -67,8 +75,11 @@ contract DAMM is BaseHook {
         address lpTokenTargetAddress
         ) BaseHook(_poolManager) payable {
         // Check _pooledTokens and precisions parameter
-        require(_pooledTokens.length > 1, "_pooledTokens.length <= 1");
-        require(_pooledTokens.length <= 32, "_pooledTokens.length > 32");
+        require(_pooledTokens.length == 2, "_pooledTokens.length == 2");
+
+        require(address(_pooledTokens[0]) != address(_pooledTokens[1]), "must be different");
+        // require(_pooledTokens.length > 1, "_pooledTokens.length <= 1");
+        // require(_pooledTokens.length <= 32, "_pooledTokens.length > 32");
         require(
             _pooledTokens.length == decimals.length,
             "_pooledTokens decimals mismatch"
@@ -93,10 +104,13 @@ contract DAMM is BaseHook {
                 decimals[i] <= SwapUtilsV2.POOL_PRECISION_DECIMALS,
                 "Token decimals exceeds max"
             );
+
+
             precisionMultipliers[i] =
                 10 **
                     (uint256(SwapUtilsV2.POOL_PRECISION_DECIMALS) -
                         uint256(decimals[i]));
+
             tokenIndexes[address(_pooledTokens[i])] = i;
         }
 
@@ -108,9 +122,9 @@ contract DAMM is BaseHook {
             "_adminFee exceeds maximum"
         );
 
-        //to do proxy check
         // Clone and initialize a LPToken contract
         LPTokenV2 lpToken = LPTokenV2(lpTokenTargetAddress);
+        // to do remove scatch work
         // LPTokenV2 lpToken = LPTokenV2(Clones.clone(lpTokenTargetAddress));
         // require(
         //     lpToken.initialize(lpTokenName, lpTokenSymbol),
@@ -129,6 +143,32 @@ contract DAMM is BaseHook {
         swapStorage.swapFee = _fee;
         swapStorage.adminFee = _adminFee;
 
+        // to do  add PoolKey  key  
+        // to do initalize Uni Pool here or just store ?
+        address tokenA =  address(_pooledTokens[0]);
+        address tokenB =  address(_pooledTokens[1]);
+
+        (address token0, address token1) = tokenA < tokenB ? (tokenA, tokenB) : (tokenB, tokenA);
+
+        swapStorage.poolKey =  PoolKey({
+          currency0: Currency.wrap(token0),
+          currency1: Currency.wrap(token1),
+          fee: 3000,
+          hooks: IHooks(address(this)),
+          tickSpacing: 60
+        });
+
+    }
+
+    /*** MODIFIERS ***/
+
+    /**
+     * @notice Modifier to check deadline against current timestamp
+     * @param deadline latest timestamp to accept this transaction
+     */
+    modifier deadlineCheck(uint256 deadline) {
+        require(block.timestamp <= deadline, "Deadline not met");
+        _;
     }
 
     // balanced liquidity in the pool, increase the amplifier ( the slippage is minimum) and the curve tries to mimic the Constant Price Model curve
@@ -179,20 +219,48 @@ contract DAMM is BaseHook {
     // todo modify to comply with univ4 data stucture
     // ie. remove total supply 
     // Customized add liquidity with totalSupply/ transferFrom / balanceOf
-    function addLiquidity(PoolKey calldata key, uint256 amountEach) external {
+    function addLiquidity(
 
-        poolManager.unlock(
-            abi.encode(
-                CallbackData(
-                    amountEach,
-                    key.currency0,
-                    key.currency1,
-                    msg.sender
-                )
-            )
-        );
+
+        // PoolKey calldata key,
+
+        uint256[] calldata amounts,
+        uint256 minToMint,
+        uint256 deadline
+    )
+        external
+        payable
+        virtual
+        nonReentrant
+        whenNotPaused
+        deadlineCheck(deadline)
+        returns (uint256)
+    {
+        //to do assert if key already init
+        // /to do assert if key in constructor is correct or not
+
+        return swapStorage.addLiquidity( amounts, minToMint);
+
+        // poolManager.unlock(
+        //     abi.encode(
+        //         CallbackData(
+        //             amounts[0],
+        //             amounts[1],
+        //             swapStorage.poolKey.currency0,
+        //             swapStorage.poolKey.currency1,
+        //             msg.sender
+        //         )
+        //     )
+        // );
 
     }
 
+
+    function unlockCallback(
+        bytes calldata data
+    ) external override poolManagerOnly returns (bytes memory) {
+
+    return "";
+    }
 
 }
