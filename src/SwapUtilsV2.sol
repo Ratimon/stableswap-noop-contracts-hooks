@@ -1,6 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity =0.8.25;
 
+import {IPoolManager} from "v4-core/interfaces/IPoolManager.sol";
+import {IERC6909Claims} from "v4-core/interfaces/external/IERC6909Claims.sol";
+
+import {Currency, CurrencyLibrary} from "v4-core/types/Currency.sol";
+import {CurrencySettleTake} from "v4-core/libraries/CurrencySettleTake.sol";
+
+
 
 import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {AmplificationUtilsV2} from "@main/AmplificationUtilsV2.sol";
@@ -20,6 +27,8 @@ import {PoolKey} from "v4-core/types/PoolKey.sol";
  */
 library SwapUtilsV2 {
     using SafeERC20 for IERC20;
+    using CurrencyLibrary for Currency;
+    using CurrencySettleTake for Currency;
     using MathUtilsV1 for uint256;
 
     /*** EVENTS ***/
@@ -61,6 +70,7 @@ library SwapUtilsV2 {
     event NewSwapFee(uint256 newSwapFee);
 
     struct Swap {
+        address poolManager;
         // variables around the ramp management of A,
         // the amplification coefficient * n * (n - 1)
         // see https://www.curve.fi/stableswap-paper.pdf for details
@@ -714,6 +724,13 @@ library SwapUtilsV2 {
         return dy;
     }
 
+    struct CallbackData {
+        uint256 amount;
+        Currency currency;
+        address sender;
+        address poolManager;
+    }
+
     /**
      * @notice Add liquidity to the pool
      * @param self Swap struct to read from and write to
@@ -728,6 +745,9 @@ library SwapUtilsV2 {
         uint256[] memory amounts,
         uint256 minToMint
     ) external returns (uint256) {
+
+        // to do : remove  self.pooledTokens? as we have already modify to Uni's Currency
+
         IERC20[] memory pooledTokens = self.pooledTokens;
         require(
             amounts.length == pooledTokens.length,
@@ -754,6 +774,9 @@ library SwapUtilsV2 {
         uint256[] memory newBalances = new uint256[](pooledTokens.length);
 
         for (uint256 i = 0; i < pooledTokens.length; i++) {
+
+            uint currentId = i == 0 ? self.poolKey.currency0.toId() : self.poolKey.currency1.toId();
+
             require(
                 v.totalSupply != 0 || amounts[i] > 0,
                 "Must supply all tokens in pool"
@@ -763,22 +786,45 @@ library SwapUtilsV2 {
             // Transfer tokens first to see if a fee was charged on transfer
             if (amounts[i] != 0) {
 
-                uint256 beforeBalance = pooledTokens[i].balanceOf(
-                    address(this)
-                );
+                //eip6909
 
-                
-
-                pooledTokens[i].safeTransferFrom(
-                    msg.sender,
+                uint256 beforeBalance = IERC6909Claims(self.poolManager).balanceOf(
                     address(this),
-                    amounts[i]
+                    currentId
                 );
+
+                // uint256 beforeBalance = pooledTokens[i].balanceOf(
+                //     address(this)
+                // );
+
+                IPoolManager(self.poolManager).unlock(
+                    abi.encode(
+                        CallbackData(
+                            amounts[i],
+                            CurrencyLibrary.fromId(currentId),
+                            msg.sender,
+                            self.poolManager
+                        )
+                    )
+                );
+
+                // pooledTokens[i].safeTransferFrom(
+                //     msg.sender,
+                //     address(this),
+                //     amounts[i]
+                // );
+
 
                 // Update the amounts[] with actual transfer amount
+
                 amounts[i] =
-                    pooledTokens[i].balanceOf(address(this)) -
+                    IERC6909Claims(self.poolManager).balanceOf(address(this), currentId) -
                     beforeBalance;
+
+                
+                // amounts[i] =
+                //     pooledTokens[i].balanceOf(address(this)) -
+                //     beforeBalance;
             }
 
             newBalances[i] = v.balances[i] + amounts[i];
@@ -786,6 +832,8 @@ library SwapUtilsV2 {
         // invariant after change
         v.d1 = getD(_xp(newBalances, v.multipliers), v.preciseA);
         require(v.d1 > v.d0, "D should increase");
+
+
         // updated to reflect fees and calculate the user's LP tokens
         v.d2 = v.d1;
         uint256[] memory fees = new uint256[](pooledTokens.length);
@@ -832,6 +880,47 @@ library SwapUtilsV2 {
         );
 
         return toMint;
+    }
+
+    function unlockCallback(
+        bytes calldata data
+    ) external returns (bytes memory) {
+
+        CallbackData memory callbackData = abi.decode(data, (CallbackData));
+
+        // to do : refactor to poolManagerOnly
+        require(msg.sender == callbackData.poolManager );
+
+
+        // to do : add if else for addLiqudity or ..
+
+
+        // Settle `amountEach` of each currency from the sender
+        // i.e. Create a debit of `amountEach` of each currency with the Pool Manager
+        callbackData.currency.settle(
+            IPoolManager(callbackData.poolManager),
+            callbackData.sender,
+            callbackData.amount,
+            false // `burn` = `false` i.e. we're actually transferring tokens, not burning ERC-6909 Claim Tokens
+        );
+
+        // Since we didn't go through the regular "modify liquidity" flow,
+        // the PM just has a debit of `amountEach` of each currency from us
+        // We can, in exchange, get back ERC-6909 claim tokens for `amountEach` of each currency
+        // to create a credit of `amountEach` of each currency to us
+        // that balances out the debit
+
+        // We will store those claim tokens with the hook, so when swaps take place
+        // liquidity from our CSMM can be used by minting/burning claim tokens the hook owns
+        callbackData.currency.take(
+            IPoolManager(callbackData.poolManager),
+            address(this),
+            callbackData.amount,
+            true // true = mint claim tokens for the hook, equivalent to money we just deposited to the PM
+        );
+
+
+        return "";
     }
 
     /**

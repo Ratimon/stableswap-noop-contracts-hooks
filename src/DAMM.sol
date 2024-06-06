@@ -4,10 +4,8 @@ pragma solidity =0.8.25;
 import {IPoolManager} from "v4-core/interfaces/IPoolManager.sol";
 import {IHooks} from "v4-core/interfaces/IHooks.sol";
 
-
 import {PoolKey} from "v4-core/types/PoolKey.sol";
 import {Currency} from "v4-core/types/Currency.sol";
-import {CurrencySettleTake} from "v4-core/libraries/CurrencySettleTake.sol";
 import {Hooks} from "v4-core/libraries/Hooks.sol";
 import {BeforeSwapDelta, toBeforeSwapDelta} from "v4-core/types/BeforeSwapDelta.sol";
 import {BaseHook} from "@main/univ4/BaseHook.sol";
@@ -23,7 +21,7 @@ import {AmplificationUtilsV2} from  "@main/AmplificationUtilsV2.sol";
 
 contract DAMM is BaseHook, ReentrancyGuard, Pausable {
 
-    using CurrencySettleTake for Currency;
+    // using CurrencySettleTake for Currency;
 
     using SafeERC20 for IERC20;
     // to do : remove scatch work
@@ -42,20 +40,13 @@ contract DAMM is BaseHook, ReentrancyGuard, Pausable {
 
     error AddLiquidityThroughHook();
 
-    struct CallbackData {
-        uint256 amount0;
-        uint256 amount1;
-        Currency currency0;
-        Currency currency1;
-        address sender;
-    }
 
     /**
      * @notice Initializes this Swap contract with the given parameters.
      * The owner of LPToken will be this contract - which means
      * only this contract is allowed to mint/burn tokens.
      *
-    * @param _poolManager reference to Uniswap v4 position manager
+     * @param _poolManager reference to Uniswap v4 position manager
      * @param _pooledTokens an array of ERC20s this pool will accept
      * @param decimals the decimals to use for each pooled token,
      * eg 8 for WBTC. Cannot be larger than POOL_PRECISION_DECIMALS
@@ -77,7 +68,6 @@ contract DAMM is BaseHook, ReentrancyGuard, Pausable {
         // Check _pooledTokens and precisions parameter
         require(_pooledTokens.length == 2, "_pooledTokens.length == 2");
 
-        require(address(_pooledTokens[0]) != address(_pooledTokens[1]), "must be different");
         // require(_pooledTokens.length > 1, "_pooledTokens.length <= 1");
         // require(_pooledTokens.length <= 32, "_pooledTokens.length > 32");
         require(
@@ -124,7 +114,8 @@ contract DAMM is BaseHook, ReentrancyGuard, Pausable {
 
         // Clone and initialize a LPToken contract
         LPTokenV2 lpToken = LPTokenV2(lpTokenTargetAddress);
-        // to do remove scatch work
+
+        // to do : remove scatch work
         // LPTokenV2 lpToken = LPTokenV2(Clones.clone(lpTokenTargetAddress));
         // require(
         //     lpToken.initialize(lpTokenName, lpTokenSymbol),
@@ -132,6 +123,7 @@ contract DAMM is BaseHook, ReentrancyGuard, Pausable {
         // );
 
         // Initialize swapStorage struct
+        swapStorage.poolManager = address(_poolManager);
         swapStorage.lpToken = lpToken;
         swapStorage.pooledTokens = _pooledTokens;
         swapStorage.tokenPrecisionMultipliers = precisionMultipliers;
@@ -220,10 +212,6 @@ contract DAMM is BaseHook, ReentrancyGuard, Pausable {
     // ie. remove total supply 
     // Customized add liquidity with totalSupply/ transferFrom / balanceOf
     function addLiquidity(
-
-
-        // PoolKey calldata key,
-
         uint256[] calldata amounts,
         uint256 minToMint,
         uint256 deadline
@@ -241,26 +229,8 @@ contract DAMM is BaseHook, ReentrancyGuard, Pausable {
 
         return swapStorage.addLiquidity( amounts, minToMint);
 
-        // poolManager.unlock(
-        //     abi.encode(
-        //         CallbackData(
-        //             amounts[0],
-        //             amounts[1],
-        //             swapStorage.poolKey.currency0,
-        //             swapStorage.poolKey.currency1,
-        //             msg.sender
-        //         )
-        //     )
-        // );
-
     }
 
-
-    function unlockCallback(
-        bytes calldata data
-    ) external override poolManagerOnly returns (bytes memory) {
-
-    return "";
-    }
+    // to do : add view function ie. getTokenBalance
 
 }
