@@ -249,7 +249,6 @@ contract DAMM is BaseHook, ReentrancyGuard, Pausable {
 
         // to do : add if else for addLiqudity or ..
 
-
         // Settle `amountEach` of each currency from the sender
         // i.e. Create a debit of `amountEach` of each currency with the Pool Manager
         callbackData.currency.settle(

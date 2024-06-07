@@ -90,8 +90,8 @@ contract DAMMTest is Test, Deployers {
         );
 
         uint256[] memory path = new uint256[](2);
-        path[0] = 10e18;
-        path[1] = 10e18;
+        path[0] = 100e18;
+        path[1] = 100e18;
 
         hook.addLiquidity(path, 0 , 100000 );
     }
@@ -113,8 +113,10 @@ contract DAMMTest is Test, Deployers {
             token1ClaimID
         );
 
-        assertEq(token0ClaimsBalance, 1000e18);
-        assertEq(token1ClaimsBalance, 1000e18);
+        assertEq(token0ClaimsBalance, 100e18);
+        assertEq(token1ClaimsBalance, 100e18);
     }
+
+
 
 }
