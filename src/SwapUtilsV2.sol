@@ -6,7 +6,6 @@ import {IERC6909Claims} from "v4-core/interfaces/external/IERC6909Claims.sol";
 
 import {Currency, CurrencyLibrary} from "v4-core/types/Currency.sol";
 
-
 import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {AmplificationUtilsV2} from "@main/AmplificationUtilsV2.sol";
 
@@ -80,16 +79,6 @@ library SwapUtilsV2 {
     }
 
     // Struct storing variables used in calculations in the
-    // calculateWithdrawOneTokenDY function to avoid stack too deep errors
-    struct CalculateWithdrawOneTokenDYInfo {
-        uint256 d0;
-        uint256 d1;
-        uint256 newY;
-        uint256 feePerToken;
-        uint256 preciseA;
-    }
-
-    // Struct storing variables used in calculations in the
     // {add,remove}Liquidity functions to avoid stack too deep errors
     struct ManageLiquidityInfo {
         uint256 d0;
@@ -125,115 +114,6 @@ library SwapUtilsV2 {
 
     function _getAPrecise(Swap storage self) internal view returns (uint256) {
         return AmplificationUtilsV2._getAPrecise(self);
-    }
-
-    /**
-     * @notice Calculate the dy, the amount of selected token that user receives and
-     * the fee of withdrawing in one token
-     * @param tokenAmount the amount to withdraw in the pool's precision
-     * @param tokenIndex which token will be withdrawn
-     * @param self Swap struct to read from
-     * @return the amount of token user will receive
-     */
-    function calculateWithdrawOneToken(
-        Swap storage self,
-        uint256 tokenAmount,
-        uint8 tokenIndex
-    ) external view returns (uint256) {
-        (uint256 availableTokenAmount, ) = _calculateWithdrawOneToken(
-            self,
-            tokenAmount,
-            tokenIndex,
-            self.lpToken.totalSupply()
-        );
-        return availableTokenAmount;
-    }
-
-    function _calculateWithdrawOneToken(
-        Swap storage self,
-        uint256 tokenAmount,
-        uint8 tokenIndex,
-        uint256 totalSupply
-    ) internal view returns (uint256, uint256) {
-        uint256 dy;
-        uint256 newY;
-        uint256 currentY;
-
-        (dy, newY, currentY) = calculateWithdrawOneTokenDY(
-            self,
-            tokenIndex,
-            tokenAmount,
-            totalSupply
-        );
-
-        // dy_0 (without fees)
-        // dy, dy_0 - dy
-
-        uint256 dySwapFee = ((currentY - newY) /
-            self.tokenPrecisionMultipliers[tokenIndex]) - dy;
-
-        return (dy, dySwapFee);
-    }
-
-    /**
-     * @notice Calculate the dy of withdrawing in one token
-     * @param self Swap struct to read from
-     * @param tokenIndex which token will be withdrawn
-     * @param tokenAmount the amount to withdraw in the pools precision
-     * @return the d and the new y after withdrawing one token
-     */
-    function calculateWithdrawOneTokenDY(
-        Swap storage self,
-        uint8 tokenIndex,
-        uint256 tokenAmount,
-        uint256 totalSupply
-    )
-        internal
-        view
-        returns (
-            uint256,
-            uint256,
-            uint256
-        )
-    {
-        // Get the current D, then solve the stableswap invariant
-        // y_i for D - tokenAmount
-        uint256[] memory xp = _xp(self);
-
-        require(tokenIndex < xp.length, "Token index out of range");
-
-        CalculateWithdrawOneTokenDYInfo
-            memory v = CalculateWithdrawOneTokenDYInfo(0, 0, 0, 0, 0);
-        v.preciseA = _getAPrecise(self);
-        v.d0 = getD(xp, v.preciseA);
-        v.d1 = v.d0 - ((tokenAmount * v.d0) / totalSupply);
-
-        require(tokenAmount <= xp[tokenIndex], "Withdraw exceeds available");
-
-        v.newY = getYD(v.preciseA, tokenIndex, xp, v.d1);
-
-        uint256[] memory xpReduced = new uint256[](xp.length);
-
-        v.feePerToken = _feePerToken(self.swapFee, xp.length);
-        for (uint256 i = 0; i < xp.length; i++) {
-            uint256 xpi = xp[i];
-            // if i == tokenIndex, dxExpected = xp[i] * d1 / d0 - newY
-            // else dxExpected = xp[i] - (xp[i] * d1 / d0)
-            // xpReduced[i] -= dxExpected * fee / FEE_DENOMINATOR
-            xpReduced[i] =
-                xpi -
-                (((
-                    (i == tokenIndex)
-                        ? ((xpi * v.d1) / v.d0) - v.newY
-                        : xpi - ((xpi * v.d1) / v.d0)
-                ) * v.feePerToken) / FEE_DENOMINATOR);
-        }
-
-        uint256 dy = xpReduced[tokenIndex] -
-            (getYD(v.preciseA, tokenIndex, xpReduced, v.d1));
-        dy = (dy - 1) / self.tokenPrecisionMultipliers[tokenIndex];
-
-        return (dy, v.newY, xp[tokenIndex]);
     }
 
     /**
