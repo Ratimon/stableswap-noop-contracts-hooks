@@ -7,5 +7,6 @@ evm_version = "cancun"
 optimizer_runs = 800
 via_ir = false
 ffi = true
+memory_limit = 1000000000
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options

@@ -1,31 +1,38 @@
 // SPDX-License-Identifier: MIT
 pragma solidity =0.8.25;
 
+import "@forge-std/console2.sol";
+
 import {IPoolManager} from "v4-core/interfaces/IPoolManager.sol";
 import {IHooks} from "v4-core/interfaces/IHooks.sol";
 
 import {PoolKey} from "v4-core/types/PoolKey.sol";
 import {Currency} from "v4-core/types/Currency.sol";
+import {CurrencySettleTake} from "v4-core/libraries/CurrencySettleTake.sol";
 import {Hooks} from "v4-core/libraries/Hooks.sol";
 import {BeforeSwapDelta, toBeforeSwapDelta} from "v4-core/types/BeforeSwapDelta.sol";
 import {BaseHook} from "@main/univ4/BaseHook.sol";
 
 import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Clones} from "@openzeppelin/contracts/proxy/Clones.sol";
-import {ReentrancyGuard} from "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-import {Pausable} from "@openzeppelin/contracts/security/Pausable.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 
 // import {LPTokenV2} from "@main/LPTokenV2.sol";
-import {SwapUtilsV2, LPTokenV2} from "@main/SwapUtilsV2.sol";
+
+
+import { SwapUtilsV2, LPTokenV2} from "@main/SwapUtilsV2.sol";
 import {AmplificationUtilsV2} from  "@main/AmplificationUtilsV2.sol";
 
 contract DAMM is BaseHook, ReentrancyGuard, Pausable {
 
-    // using CurrencySettleTake for Currency;
+    using CurrencySettleTake for Currency;
 
     using SafeERC20 for IERC20;
     // to do : remove scatch work
     using SwapUtilsV2 for SwapUtilsV2.Swap;
+    using SwapUtilsV2 for SwapUtilsV2.CallbackData
+    ;
     using AmplificationUtilsV2 for SwapUtilsV2.Swap;
 
     // Struct storing data responsible for automatic market maker functionalities. In order to
@@ -50,20 +57,22 @@ contract DAMM is BaseHook, ReentrancyGuard, Pausable {
      * @param _pooledTokens an array of ERC20s this pool will accept
      * @param decimals the decimals to use for each pooled token,
      * eg 8 for WBTC. Cannot be larger than POOL_PRECISION_DECIMALS
+     * @param lpTokenName the long-form name of the token to be deployed
+     * @param lpTokenSymbol the short symbol for the token to be deployed
      * @param _a the amplification coefficient * n * (n - 1). See the
      * StableSwap paper for details
      * @param _fee default swap fee to be initialized with
      * @param _adminFee default adminFee to be initialized with
-     * @param lpTokenTargetAddress the address of an existing LPToken contract to use as a target
      */
     constructor(
         IPoolManager _poolManager,
         IERC20[] memory _pooledTokens,
         uint8[] memory decimals,
+        string memory lpTokenName,
+        string memory lpTokenSymbol,
         uint256 _a,
         uint256 _fee,
-        uint256 _adminFee,
-        address lpTokenTargetAddress
+        uint256 _adminFee
         ) BaseHook(_poolManager) payable {
         // Check _pooledTokens and precisions parameter
         require(_pooledTokens.length == 2, "_pooledTokens.length == 2");
@@ -95,11 +104,16 @@ contract DAMM is BaseHook, ReentrancyGuard, Pausable {
                 "Token decimals exceeds max"
             );
 
+            console2.log("decimals[i]");
+            console2.log(decimals[i]);
 
             precisionMultipliers[i] =
                 10 **
                     (uint256(SwapUtilsV2.POOL_PRECISION_DECIMALS) -
                         uint256(decimals[i]));
+
+            console2.log("precisionMultipliers[i]");
+            console2.log(precisionMultipliers[i]);
 
             tokenIndexes[address(_pooledTokens[i])] = i;
         }
@@ -113,14 +127,14 @@ contract DAMM is BaseHook, ReentrancyGuard, Pausable {
         );
 
         // Clone and initialize a LPToken contract
-        LPTokenV2 lpToken = LPTokenV2(lpTokenTargetAddress);
+        LPTokenV2 lpToken = new LPTokenV2();
 
         // to do : remove scatch work
         // LPTokenV2 lpToken = LPTokenV2(Clones.clone(lpTokenTargetAddress));
-        // require(
-        //     lpToken.initialize(lpTokenName, lpTokenSymbol),
-        //     "could not init lpToken clone"
-        // );
+        require(
+            lpToken.initialize(lpTokenName, lpTokenSymbol, address(this)),
+            "could not init lpToken clone"
+        );
 
         // Initialize swapStorage struct
         swapStorage.poolManager = address(_poolManager);
@@ -229,6 +243,47 @@ contract DAMM is BaseHook, ReentrancyGuard, Pausable {
 
         return swapStorage.addLiquidity( amounts, minToMint);
 
+    }
+
+    function unlockCallback(
+        bytes calldata data
+    ) external override returns (bytes memory) {
+
+        SwapUtilsV2.CallbackData memory callbackData = abi.decode(data, (SwapUtilsV2.CallbackData));
+
+        // to do : refactor to poolManagerOnly
+        require(msg.sender == callbackData.poolManager );
+
+
+        // to do : add if else for addLiqudity or ..
+
+
+        // Settle `amountEach` of each currency from the sender
+        // i.e. Create a debit of `amountEach` of each currency with the Pool Manager
+        callbackData.currency.settle(
+            IPoolManager(callbackData.poolManager),
+            callbackData.sender,
+            callbackData.amount,
+            false // `burn` = `false` i.e. we're actually transferring tokens, not burning ERC-6909 Claim Tokens
+        );
+
+        // Since we didn't go through the regular "modify liquidity" flow,
+        // the PM just has a debit of `amountEach` of each currency from us
+        // We can, in exchange, get back ERC-6909 claim tokens for `amountEach` of each currency
+        // to create a credit of `amountEach` of each currency to us
+        // that balances out the debit
+
+        // We will store those claim tokens with the hook, so when swaps take place
+        // liquidity from our CSMM can be used by minting/burning claim tokens the hook owns
+        callbackData.currency.take(
+            IPoolManager(callbackData.poolManager),
+            address(this),
+            callbackData.amount,
+            true // true = mint claim tokens for the hook, equivalent to money we just deposited to the PM
+        );
+
+
+        return "";
     }
 
     // to do : add view function ie. getTokenBalance

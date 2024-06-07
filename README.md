@@ -22,3 +22,10 @@ optimizer_runs = 800
 via_ir = false
 ffi = true
 ```
+
+### Dependencies
+
+```bash
+pnpm add -D @openzeppelin/contracts@5.0.2
+pnpm add -D openzeppelin/contracts-upgradeable@5.0.2
+```

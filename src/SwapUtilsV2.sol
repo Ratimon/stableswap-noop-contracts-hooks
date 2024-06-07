@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity =0.8.25;
 
+import "@forge-std/console2.sol";
+
 import {IPoolManager} from "v4-core/interfaces/IPoolManager.sol";
 import {IERC6909Claims} from "v4-core/interfaces/external/IERC6909Claims.sol";
 
 import {Currency, CurrencyLibrary} from "v4-core/types/Currency.sol";
-import {CurrencySettleTake} from "v4-core/libraries/CurrencySettleTake.sol";
-
 
 
 import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -28,7 +28,6 @@ import {PoolKey} from "v4-core/types/PoolKey.sol";
 library SwapUtilsV2 {
     using SafeERC20 for IERC20;
     using CurrencyLibrary for Currency;
-    using CurrencySettleTake for Currency;
     using MathUtilsV1 for uint256;
 
     /*** EVENTS ***/
@@ -315,7 +314,7 @@ library SwapUtilsV2 {
         if (s == 0) {
             return 0;
         }
-
+        
         uint256 prevD;
         uint256 d = s;
         uint256 nA = a * numTokens;
@@ -327,13 +326,19 @@ library SwapUtilsV2 {
                 // If we were to protect the division loss we would have to keep the denominator separate
                 // and divide at the end. However this leads to overflow with large numTokens or/and D.
                 // dP = dP * D * D * D * ... overflow!
+
             }
+
+            console2.log("ddd");
             prevD = d;
+
             d =
                 ((((nA * s) / AmplificationUtilsV2.A_PRECISION) +
                     (dP * numTokens)) * d) /
                 ((((nA - AmplificationUtilsV2.A_PRECISION) * d) /
                     AmplificationUtilsV2.A_PRECISION) + ((numTokens + 1) * dP));
+
+
             if (d.within1(prevD)) {
                 return d;
             }
@@ -740,6 +745,10 @@ library SwapUtilsV2 {
             "Amounts must match pooled tokens"
         );
 
+        console2.log("self.tokenPrecisionMultipliers");
+        console2.log(self.tokenPrecisionMultipliers[0]);
+        console2.log(self.tokenPrecisionMultipliers[1]);
+
         // current state
         ManageLiquidityInfo memory v = ManageLiquidityInfo(
             0,
@@ -763,6 +772,9 @@ library SwapUtilsV2 {
 
             uint currentId = i == 0 ? self.poolKey.currency0.toId() : self.poolKey.currency1.toId();
 
+            console2.log("currentId");
+            console2.log(currentId);
+
             require(
                 v.totalSupply != 0 || amounts[i] > 0,
                 "Must supply all tokens in pool"
@@ -778,6 +790,9 @@ library SwapUtilsV2 {
                     address(this),
                     currentId
                 );
+
+                console2.log("beforeBalance");
+                console2.log(beforeBalance);
 
                 // uint256 beforeBalance = pooledTokens[i].balanceOf(
                 //     address(this)
@@ -807,6 +822,12 @@ library SwapUtilsV2 {
                     IERC6909Claims(self.poolManager).balanceOf(address(this), currentId) -
                     beforeBalance;
 
+                console2.log("i");
+                console2.log(i);
+
+                console2.log("amounts[i]");
+                console2.log(amounts[i]);
+
                 
                 // amounts[i] =
                 //     pooledTokens[i].balanceOf(address(this)) -
@@ -815,6 +836,18 @@ library SwapUtilsV2 {
 
             newBalances[i] = v.balances[i] + amounts[i];
         }
+
+        console2.log("newBalances");
+        console2.log(newBalances[0]);
+        console2.log(newBalances[1]);
+
+        console2.log("v.multipliers");
+        console2.log(v.multipliers[0]);
+        console2.log(v.multipliers[1]);
+
+        console2.log("v.preciseA");
+        console2.log(v.preciseA);
+
         // invariant after change
         v.d1 = getD(_xp(newBalances, v.multipliers), v.preciseA);
         require(v.d1 > v.d0, "D should increase");
@@ -866,47 +899,6 @@ library SwapUtilsV2 {
         );
 
         return toMint;
-    }
-
-    function unlockCallback(
-        bytes calldata data
-    ) external returns (bytes memory) {
-
-        CallbackData memory callbackData = abi.decode(data, (CallbackData));
-
-        // to do : refactor to poolManagerOnly
-        require(msg.sender == callbackData.poolManager );
-
-
-        // to do : add if else for addLiqudity or ..
-
-
-        // Settle `amountEach` of each currency from the sender
-        // i.e. Create a debit of `amountEach` of each currency with the Pool Manager
-        callbackData.currency.settle(
-            IPoolManager(callbackData.poolManager),
-            callbackData.sender,
-            callbackData.amount,
-            false // `burn` = `false` i.e. we're actually transferring tokens, not burning ERC-6909 Claim Tokens
-        );
-
-        // Since we didn't go through the regular "modify liquidity" flow,
-        // the PM just has a debit of `amountEach` of each currency from us
-        // We can, in exchange, get back ERC-6909 claim tokens for `amountEach` of each currency
-        // to create a credit of `amountEach` of each currency to us
-        // that balances out the debit
-
-        // We will store those claim tokens with the hook, so when swaps take place
-        // liquidity from our CSMM can be used by minting/burning claim tokens the hook owns
-        callbackData.currency.take(
-            IPoolManager(callbackData.poolManager),
-            address(this),
-            callbackData.amount,
-            true // true = mint claim tokens for the hook, equivalent to money we just deposited to the PM
-        );
-
-
-        return "";
     }
 
     /**
