@@ -16,9 +16,6 @@ import {Clones} from "@openzeppelin/contracts/proxy/Clones.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 
-// import {LPTokenV2} from "@main/LPTokenV2.sol";
-
-
 import { SwapUtilsV2, LPTokenV2} from "@main/SwapUtilsV2.sol";
 import {AmplificationUtilsV2} from  "@main/AmplificationUtilsV2.sol";
 
@@ -118,7 +115,7 @@ contract DAMM is BaseHook, ReentrancyGuard, Pausable {
             "_adminFee exceeds maximum"
         );
 
-        // Clone and initialize a LPToken contract
+        // Deploy and initialize a LPToken contract
         LPTokenV2 lpToken = new LPTokenV2();
 
         // to do : remove scatch work
@@ -273,10 +270,22 @@ contract DAMM is BaseHook, ReentrancyGuard, Pausable {
             true // true = mint claim tokens for the hook, equivalent to money we just deposited to the PM
         );
 
-
         return "";
     }
 
-    // to do : add view function ie. getTokenBalance
+    /**
+     * @notice Return current balance of the pooled token at given index
+     * @param index the index of the token
+     * @return current balance of the pooled token at given index with token's native precision
+     */
+    function getTokenBalance(uint8 index)
+        external
+        view
+        virtual
+        returns (uint256)
+    {
+        require(index < swapStorage.pooledTokens.length, "Index out of range");
+        return swapStorage.balances[index];
+    }
 
 }

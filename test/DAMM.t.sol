@@ -89,34 +89,56 @@ contract DAMMTest is Test, Deployers {
             1000 ether
         );
 
-        uint256[] memory path = new uint256[](2);
-        path[0] = 100e18;
-        path[1] = 100e18;
 
-        hook.addLiquidity(path, 0 , 100000 );
+
+       
     }
 
 
     function test_claimTokenBalances() public {
-        // We add 1000 * (10^18) of liquidity of each token to the CSMM pool
-        // The actual tokens will move into the PM
-        // But the hook should get equivalent amount of claim tokens for each token
-        uint token0ClaimID = CurrencyLibrary.toId(currency0);
-        uint token1ClaimID = CurrencyLibrary.toId(currency1);
 
-        uint token0ClaimsBalance = manager.balanceOf(
+        uint256 token0ClaimID = CurrencyLibrary.toId(currency0);
+        uint256 token1ClaimID = CurrencyLibrary.toId(currency1);
+
+        uint256 token0ClaimsBalanceBefore = manager.balanceOf(
             address(hook),
             token0ClaimID
         );
-        uint token1ClaimsBalance = manager.balanceOf(
+        uint256 token1ClaimsBalanceBefore = manager.balanceOf(
             address(hook),
             token1ClaimID
         );
 
-        assertEq(token0ClaimsBalance, 100e18);
-        assertEq(token1ClaimsBalance, 100e18);
-    }
+        assertEq(token0ClaimsBalanceBefore, 0e18);
+        assertEq(token1ClaimsBalanceBefore, 0e18);
 
+        assertEq(hook.getTokenBalance(0), 0e18);
+        assertEq(hook.getTokenBalance(1), 0e18);
+
+        // We add 100 * (10^18) of liquidity of each token to the DAMM pool
+        // The actual tokens will move into the PM
+        // But the hook should get equivalent amount of claim tokens for each token
+        uint256[] memory path = new uint256[](2);
+        path[0] = 100e18;
+        path[1] = 100e18;
+        hook.addLiquidity(path, 0 , 100000 );
+
+        uint256 token0ClaimsBalanceAfter = manager.balanceOf(
+            address(hook),
+            token0ClaimID
+        );
+        uint256 token1ClaimsBalanceAfter = manager.balanceOf(
+            address(hook),
+            token1ClaimID
+        );
+
+        assertEq(token0ClaimsBalanceAfter, 100e18);
+        assertEq(token1ClaimsBalanceAfter, 100e18);
+
+        assertEq(hook.getTokenBalance(0), 100e18);
+        assertEq(hook.getTokenBalance(1), 100e18);
+        
+    }
 
 
 }
