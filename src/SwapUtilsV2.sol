@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity =0.8.25;
 
-import "@forge-std/console2.sol";
-
 import {IPoolManager} from "v4-core/interfaces/IPoolManager.sol";
 import {IERC6909Claims} from "v4-core/interfaces/external/IERC6909Claims.sol";
 
@@ -329,7 +327,6 @@ library SwapUtilsV2 {
 
             }
 
-            console2.log("ddd");
             prevD = d;
 
             d =
@@ -745,10 +742,6 @@ library SwapUtilsV2 {
             "Amounts must match pooled tokens"
         );
 
-        console2.log("self.tokenPrecisionMultipliers");
-        console2.log(self.tokenPrecisionMultipliers[0]);
-        console2.log(self.tokenPrecisionMultipliers[1]);
-
         // current state
         ManageLiquidityInfo memory v = ManageLiquidityInfo(
             0,
@@ -772,9 +765,6 @@ library SwapUtilsV2 {
 
             uint currentId = i == 0 ? self.poolKey.currency0.toId() : self.poolKey.currency1.toId();
 
-            console2.log("currentId");
-            console2.log(currentId);
-
             require(
                 v.totalSupply != 0 || amounts[i] > 0,
                 "Must supply all tokens in pool"
@@ -790,9 +780,6 @@ library SwapUtilsV2 {
                     address(this),
                     currentId
                 );
-
-                console2.log("beforeBalance");
-                console2.log(beforeBalance);
 
                 // uint256 beforeBalance = pooledTokens[i].balanceOf(
                 //     address(this)
@@ -821,13 +808,6 @@ library SwapUtilsV2 {
                 amounts[i] =
                     IERC6909Claims(self.poolManager).balanceOf(address(this), currentId) -
                     beforeBalance;
-
-                console2.log("i");
-                console2.log(i);
-
-                console2.log("amounts[i]");
-                console2.log(amounts[i]);
-
                 
                 // amounts[i] =
                 //     pooledTokens[i].balanceOf(address(this)) -
@@ -836,17 +816,6 @@ library SwapUtilsV2 {
 
             newBalances[i] = v.balances[i] + amounts[i];
         }
-
-        console2.log("newBalances");
-        console2.log(newBalances[0]);
-        console2.log(newBalances[1]);
-
-        console2.log("v.multipliers");
-        console2.log(v.multipliers[0]);
-        console2.log(v.multipliers[1]);
-
-        console2.log("v.preciseA");
-        console2.log(v.preciseA);
 
         // invariant after change
         v.d1 = getD(_xp(newBalances, v.multipliers), v.preciseA);

@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity =0.8.25;
 
-import "@forge-std/console2.sol";
-
 import {IPoolManager} from "v4-core/interfaces/IPoolManager.sol";
 import {IHooks} from "v4-core/interfaces/IHooks.sol";
 
@@ -104,16 +102,10 @@ contract DAMM is BaseHook, ReentrancyGuard, Pausable {
                 "Token decimals exceeds max"
             );
 
-            console2.log("decimals[i]");
-            console2.log(decimals[i]);
-
             precisionMultipliers[i] =
                 10 **
                     (uint256(SwapUtilsV2.POOL_PRECISION_DECIMALS) -
                         uint256(decimals[i]));
-
-            console2.log("precisionMultipliers[i]");
-            console2.log(precisionMultipliers[i]);
 
             tokenIndexes[address(_pooledTokens[i])] = i;
         }
