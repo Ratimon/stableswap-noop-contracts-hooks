@@ -4,15 +4,15 @@ pragma solidity =0.8.25;
 import {IPoolManager} from "v4-core/interfaces/IPoolManager.sol";
 import {IERC6909Claims} from "v4-core/interfaces/external/IERC6909Claims.sol";
 
+import {PoolKey} from "v4-core/types/PoolKey.sol";
 import {Currency, CurrencyLibrary} from "v4-core/types/Currency.sol";
+import {CurrencySettleTake} from "v4-core/libraries/CurrencySettleTake.sol";
 
 import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {AmplificationUtilsV2} from "@main/AmplificationUtilsV2.sol";
 
 import {LPTokenV2} from "@main/LPTokenV2.sol";
 import {MathUtilsV1} from  "@main/MathUtilsV1.sol";
-
-import {PoolKey} from "v4-core/types/PoolKey.sol";
 
 
 /**
@@ -25,6 +25,7 @@ import {PoolKey} from "v4-core/types/PoolKey.sol";
 library SwapUtilsV2 {
     using SafeERC20 for IERC20;
     using CurrencyLibrary for Currency;
+    using CurrencySettleTake for Currency;
     using MathUtilsV1 for uint256;
 
     /*** EVENTS ***/
@@ -535,6 +536,11 @@ library SwapUtilsV2 {
 
     /*** STATE MODIFYING FUNCTIONS ***/
 
+    struct SwapCallbackData {
+        uint256 deadline;
+        uint256 minDy;
+    }
+
     /**
      * @notice swap two tokens in the pool
      * @param self Swap struct to read from and write to
@@ -546,25 +552,29 @@ library SwapUtilsV2 {
      */
     function swap(
         Swap storage self,
+        IPoolManager.SwapParams calldata params,
         uint8 tokenIndexFrom,
         uint8 tokenIndexTo,
         uint256 dx,
         uint256 minDy
-    ) external returns (uint256) {
+    ) external returns (int256) {
         {
             // to do: change to univ4/6909 sette/take functionality
 
-            IERC20 tokenFrom = self.pooledTokens[tokenIndexFrom];
-            require(
-                dx <= tokenFrom.balanceOf(msg.sender),
-                "Cannot swap more than you own"
-            );
-            // Transfer tokens first to see if a fee was charged on transfer
-            uint256 beforeBalance = tokenFrom.balanceOf(address(this));
-            tokenFrom.safeTransferFrom(msg.sender, address(this), dx);
+            // IERC20 tokenFrom = self.pooledTokens[tokenIndexFrom];
+            // to do : refactor msg.sender to use callbackdata
+            // require(
+            //     dx <= tokenFrom.balanceOf(msg.sender),
+            //     "Cannot swap more than you own"
+            // );
 
-            // Use the actual transferred amount for AMM math
-            dx = tokenFrom.balanceOf(address(this)) - beforeBalance;
+            // to do : remove scratch work
+            // // Transfer tokens first to see if a fee was charged on transfer
+            // uint256 beforeBalance = tokenFrom.balanceOf(address(this));
+            // tokenFrom.safeTransferFrom(msg.sender, address(this), dx);
+
+            // // Use the actual transferred amount for AMM math
+            // dx = tokenFrom.balanceOf(address(this)) - beforeBalance;
         }
 
         uint256 dy;
@@ -582,17 +592,59 @@ library SwapUtilsV2 {
         uint256 dyAdminFee = (((dyFee * self.adminFee) / FEE_DENOMINATOR) /
             self.tokenPrecisionMultipliers[tokenIndexTo]);
 
+        // to do: state should be in afterswap hook?
+
         self.balances[tokenIndexFrom] = balances[tokenIndexFrom] + dx;
         self.balances[tokenIndexTo] = balances[tokenIndexTo] - dy - dyAdminFee;
 
-        self.pooledTokens[tokenIndexTo].safeTransfer(msg.sender, dy);
+        // to do: remove scatch work
+        // self.pooledTokens[tokenIndexTo].safeTransfer(msg.sender, dy);
+
+        if (params.zeroForOne) {
+            // If user is selling Token 0 and buying Token 1
+
+            // They will be sending Token 0 to the PM, creating a debit of Token 0 in the PM
+            // We will take claim tokens for that Token 0 from the PM and keep it in the hook
+            // and create an equivalent credit for that Token 0 since it is ours!
+            self.poolKey.currency0.take(
+                IPoolManager(self.poolManager),
+                address(this),
+                dx,
+                true
+            );
+
+            // They will be receiving Token 1 from the PM, creating a credit of Token 1 in the PM
+            // We will burn claim tokens for Token 1 from the hook so PM can pay the user
+            // and create an equivalent debit for Token 1 since it is ours!
+            self.poolKey.currency1.settle(
+                IPoolManager(self.poolManager),
+                address(this),
+                dy,
+                true
+            );
+        } else {
+
+            self.poolKey.currency0.settle(
+                IPoolManager(self.poolManager),
+                address(this),
+                dy,
+                true
+            );
+            self.poolKey.currency1.take(
+                IPoolManager(self.poolManager),
+                address(this),
+                dx,
+                true
+            );
+
+        }
 
         emit TokenSwap(msg.sender, dx, dy, tokenIndexFrom, tokenIndexTo);
 
-        return dy;
+        return int256(dy);
     }
 
-    struct CallbackData {
+    struct AddLiquidityCallbackData {
         uint256 amount;
         Currency currency;
         address sender;
@@ -667,7 +719,7 @@ library SwapUtilsV2 {
 
                 IPoolManager(self.poolManager).unlock(
                     abi.encode(
-                        CallbackData(
+                        AddLiquidityCallbackData(
                             amounts[i],
                             CurrencyLibrary.fromId(currentId),
                             msg.sender,

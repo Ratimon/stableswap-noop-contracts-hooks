@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity =0.8.25;
 
+import "@forge-std/console2.sol";
 import "@forge-std/Test.sol";
 import {IHooks} from "v4-core/interfaces/IHooks.sol";
 import {Hooks} from "v4-core/libraries/Hooks.sol";
@@ -16,9 +17,8 @@ import {IERC20Minimal} from "v4-core/interfaces/external/IERC20Minimal.sol";
 
 import {IERC20} from  "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
-
 import {DAMM} from "@main/DAMM.sol";
-import {LPTokenV2} from "@main/LPTokenV2.sol";
+import { SwapUtilsV2, LPTokenV2} from "@main/SwapUtilsV2.sol";
 
 contract DAMMTest is Test, Deployers {
 
@@ -88,14 +88,11 @@ contract DAMMTest is Test, Deployers {
             hookAddress,
             1000 ether
         );
-
-
-
        
     }
 
 
-    function test_claimTokenBalances() public {
+    function test_claimTokenBalances() external {
 
         uint256 token0ClaimID = CurrencyLibrary.toId(currency0);
         uint256 token1ClaimID = CurrencyLibrary.toId(currency1);
@@ -140,5 +137,52 @@ contract DAMMTest is Test, Deployers {
         
     }
 
+
+    function test_swap_exactOutput_zeroForOne() external {
+
+        uint256[] memory path = new uint256[](2);
+        path[0] = 1000e18;
+        path[1] = 1000e18;
+        hook.addLiquidity(path, 0 , 100000 );
+
+        PoolSwapTest.TestSettings memory settings = PoolSwapTest.TestSettings({
+            takeClaims: false,
+            settleUsingBurn: false
+        });
+
+        // to do : IERC20Minimal(Currency.unwrap(currency)).balanceOf(owner), allowing pranking
+        // https://github.com/Uniswap/v4-core/blob/ae86975b058d386c9be24e8994236f662affacdb/src/types/Currency.sol#L72
+
+        // Swap exact input 100 Token A
+        uint balanceOfTokenABefore = key.currency0.balanceOfSelf();
+        uint balanceOfTokenBBefore = key.currency1.balanceOfSelf();
+
+        console2.log('balanceOfTokenABefore');
+        console2.log(balanceOfTokenABefore);
+        console2.log('balanceOfTokenBBefore');
+        console2.log(balanceOfTokenBBefore);
+
+
+        swapRouter.swap(
+            key,
+            IPoolManager.SwapParams({
+                zeroForOne: true,
+                amountSpecified: -100e18,
+                sqrtPriceLimitX96: TickMath.MIN_SQRT_PRICE + 1
+            }),
+            settings,
+            abi.encode(
+                SwapUtilsV2.SwapCallbackData(
+                    type(uint256).max,
+                    90e18
+                )
+            )
+        );
+
+        // uint balanceOfTokenAAfter = key.currency0.balanceOfSelf();
+        // uint balanceOfTokenBAfter = key.currency1.balanceOfSelf();
+
+
+    }
 
 }

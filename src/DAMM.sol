@@ -26,21 +26,23 @@ contract DAMM is BaseHook, ReentrancyGuard, Pausable {
     using SafeERC20 for IERC20;
     // to do : remove scatch work
     using SwapUtilsV2 for SwapUtilsV2.Swap;
-    using SwapUtilsV2 for SwapUtilsV2.CallbackData
-    ;
+    using SwapUtilsV2 for SwapUtilsV2.AddLiquidityCallbackData;
+    using SwapUtilsV2 for SwapUtilsV2.SwapCallbackData;
     using AmplificationUtilsV2 for SwapUtilsV2.Swap;
 
     // Struct storing data responsible for automatic market maker functionalities. In order to
     // access this data, this contract uses SwapUtils library. For more details, see SwapUtils.sol
     SwapUtilsV2.Swap public swapStorage;
 
-    PoolKey  public poolKey;
+    PoolKey public poolKey;
 
     // Maps token address to an index in the pool. Used to prevent duplicate tokens in the pool.
     // getTokenIndex function also relies on this mapping to retrieve token index.
     mapping(address => uint8) private tokenIndexes;
 
-    error AddLiquidityThroughHook();
+    error AddLiquidityThroughHookNotAllowed();
+
+    error SwapExactOutputNotAllowed();
 
 
     /**
@@ -78,6 +80,25 @@ contract DAMM is BaseHook, ReentrancyGuard, Pausable {
             _pooledTokens.length == decimals.length,
             "_pooledTokens decimals mismatch"
         );
+
+        // IERC20[] memory _sortedPooledTokens = new IERC20[](decimals.length);
+
+        // address tokenA =  address(_pooledTokens[0]);
+        // address tokenB =  address(_pooledTokens[1]);
+
+        // uint8 decimalA;
+        // uint8 decimalB;
+
+        (address token0, address token1 , uint8 decimal0, uint8 decimal1 )
+            = address(_pooledTokens[0]) < address(_pooledTokens[1]) ?
+                (address(_pooledTokens[0]), address(_pooledTokens[1]), decimals[0] , decimals[1] )
+                : (address(_pooledTokens[1]), address(_pooledTokens[0]), decimals[1] , decimals[0]);
+
+        _pooledTokens[0] = IERC20(token0);
+        _pooledTokens[1] = IERC20(token1);
+
+        decimals[0] = decimal0;
+        decimals[1] = decimal1;
 
         uint256[] memory precisionMultipliers = new uint256[](decimals.length);
 
@@ -128,6 +149,7 @@ contract DAMM is BaseHook, ReentrancyGuard, Pausable {
         // Initialize swapStorage struct
         swapStorage.poolManager = address(_poolManager);
         swapStorage.lpToken = lpToken;
+        //to do :  sort pooledTokens
         swapStorage.pooledTokens = _pooledTokens;
         swapStorage.tokenPrecisionMultipliers = precisionMultipliers;
         swapStorage.balances = new uint256[](_pooledTokens.length);
@@ -138,14 +160,10 @@ contract DAMM is BaseHook, ReentrancyGuard, Pausable {
         swapStorage.swapFee = _fee;
         swapStorage.adminFee = _adminFee;
 
-        // to do  add PoolKey  key  
-        // to do initalize Uni Pool here or just store ?
-        address tokenA =  address(_pooledTokens[0]);
-        address tokenB =  address(_pooledTokens[1]);
+        // to do : add PoolKey  key  
+        // to do : initalize Uni Pool here or just store ?
 
-        (address token0, address token1) = tokenA < tokenB ? (tokenA, tokenB) : (tokenB, tokenA);
-
-        swapStorage.poolKey =  PoolKey({
+        swapStorage.poolKey = PoolKey({
           currency0: Currency.wrap(token0),
           currency1: Currency.wrap(token1),
           fee: 3000,
@@ -153,17 +171,6 @@ contract DAMM is BaseHook, ReentrancyGuard, Pausable {
           tickSpacing: 60
         });
 
-    }
-
-    /*** MODIFIERS ***/
-
-    /**
-     * @notice Modifier to check deadline against current timestamp
-     * @param deadline latest timestamp to accept this transaction
-     */
-    modifier deadlineCheck(uint256 deadline) {
-        require(block.timestamp <= deadline, "Deadline not met");
-        _;
     }
 
     // balanced liquidity in the pool, increase the amplifier ( the slippage is minimum) and the curve tries to mimic the Constant Price Model curve
@@ -200,7 +207,7 @@ contract DAMM is BaseHook, ReentrancyGuard, Pausable {
         IPoolManager.ModifyLiquidityParams calldata,
         bytes calldata
     ) external pure override returns (bytes4) {
-        revert AddLiquidityThroughHook();
+        revert AddLiquidityThroughHookNotAllowed();
     }
 
     // if (data.deposit) {
@@ -224,9 +231,9 @@ contract DAMM is BaseHook, ReentrancyGuard, Pausable {
         virtual
         nonReentrant
         whenNotPaused
-        deadlineCheck(deadline)
         returns (uint256)
     {
+        require(block.timestamp <= deadline, "Deadline not met");
         //to do assert if key already init
         // /to do assert if key in constructor is correct or not
 
@@ -238,7 +245,7 @@ contract DAMM is BaseHook, ReentrancyGuard, Pausable {
         bytes calldata data
     ) external override returns (bytes memory) {
 
-        SwapUtilsV2.CallbackData memory callbackData = abi.decode(data, (SwapUtilsV2.CallbackData));
+        SwapUtilsV2.AddLiquidityCallbackData memory callbackData = abi.decode(data, (SwapUtilsV2.AddLiquidityCallbackData));
 
         // to do : refactor to poolManagerOnly
         require(msg.sender == callbackData.poolManager );
@@ -271,6 +278,71 @@ contract DAMM is BaseHook, ReentrancyGuard, Pausable {
         );
 
         return "";
+    }
+
+    function beforeSwap(
+        address,
+        PoolKey calldata key,
+        IPoolManager.SwapParams calldata params,
+        bytes calldata data
+    )
+        external
+        override
+        nonReentrant
+        whenNotPaused
+        returns (bytes4, BeforeSwapDelta, uint24)
+        {
+
+        SwapUtilsV2.SwapCallbackData memory callbackData = abi.decode(data, (SwapUtilsV2.SwapCallbackData));
+        require(block.timestamp <= callbackData.deadline, "Deadline not met");
+
+        // futher modifier? ie. deadlineCheck
+        // ? do we really need the assertion of key ie .require( ....)
+
+        // if (callbackData.minDy >= 0) revert SwapExactOutputNotAllowed();
+        if (params.amountSpecified >= 0) revert SwapExactOutputNotAllowed();
+
+        uint256 dxInPositive = params.amountSpecified > 0
+            ? uint256(params.amountSpecified)
+            : uint256(-params.amountSpecified);
+
+
+        // BalanceDelta is a packed value of (currency0Amount, currency1Amount)
+
+        // BeforeSwapDelta varies such that it is not sorted by token0 and token1
+        // Instead, it is sorted by "specifiedCurrency" and "unspecifiedCurrency"
+
+        // Specified Currency => The currency in which the user is specifying the amount they're swapping for
+        // Unspecified Currency => The other currency
+
+
+        uint8 tokenIndexFrom;
+        uint8 tokenIndexTo;
+
+        if (params.zeroForOne) {
+
+            tokenIndexFrom = 0;
+            tokenIndexTo = 1;
+
+        } else {
+
+            tokenIndexFrom = 1;
+            tokenIndexTo = 0;
+
+        }
+
+        int256 dy = swapStorage.swap( params, tokenIndexFrom, tokenIndexTo, dxInPositive, callbackData.minDy);
+
+
+        //   int128(-dy) must be bnegative when int128(-params.amountSpecified) is positive
+        BeforeSwapDelta beforeSwapDelta = toBeforeSwapDelta(
+            int128(-params.amountSpecified), // So `specifiedAmount` = +100 (exact input : amout into poolManager )  or  -100 (exact output : amout outof poolManager )
+            int128(-dy) // Unspecified amount (output delta) = -100 (  amout out of poolManager )  / 100 ( amout into poolManager ) 
+        );
+
+        // to do change type of fee to uint24
+        return (this.beforeSwap.selector, beforeSwapDelta, uint24(swapStorage.swapFee));
+
     }
 
     /**
