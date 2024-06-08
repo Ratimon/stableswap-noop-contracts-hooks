@@ -210,15 +210,15 @@ contract DAMM is BaseHook, ReentrancyGuard, Pausable {
         revert AddLiquidityThroughHookNotAllowed();
     }
 
-    // if (data.deposit) {
+    // when deposit
     //     data.currency.take(manager, data.user, data.amount, true); // mint 6909
     //     data.currency.settle(manager, data.user, data.amount, false); // transfer ERC20
-    // } else {
+    // when withdraw
     //     data.currency.settle(manager, data.user, data.amount, true); // burn 6909
     //     data.currency.take(manager, data.user, data.amount, false); // claim ERC20
 
 
-    // todo modify to comply with univ4 data stucture
+    // to do modify to comply with univ4 data stucture
     // ie. remove total supply 
     // Customized add liquidity with totalSupply/ transferFrom / balanceOf
     function addLiquidity(
@@ -234,8 +234,8 @@ contract DAMM is BaseHook, ReentrancyGuard, Pausable {
         returns (uint256)
     {
         require(block.timestamp <= deadline, "Deadline not met");
-        //to do assert if key already init
-        // /to do assert if key in constructor is correct or not
+        //to do assert if key already init ?
+        //to do assert if key in constructor is correct or not ?
 
         return swapStorage.addLiquidity( amounts, minToMint);
 
@@ -246,15 +246,12 @@ contract DAMM is BaseHook, ReentrancyGuard, Pausable {
     ) external override returns (bytes memory) {
 
         SwapUtilsV2.AddLiquidityCallbackData memory callbackData = abi.decode(data, (SwapUtilsV2.AddLiquidityCallbackData));
-
-        // to do : refactor to poolManagerOnly
         require(msg.sender == callbackData.poolManager );
-
 
         // to do : add if else for addLiqudity or ..
 
-        // Settle `amountEach` of each currency from the sender
-        // i.e. Create a debit of `amountEach` of each currency with the Pool Manager
+        // Settle `callbackData.amount` of each currency from the sender
+        // i.e. Create a debit of `callbackData.amount` of each currency with the Pool Manager
         callbackData.currency.settle(
             IPoolManager(callbackData.poolManager),
             callbackData.sender,
@@ -263,9 +260,9 @@ contract DAMM is BaseHook, ReentrancyGuard, Pausable {
         );
 
         // Since we didn't go through the regular "modify liquidity" flow,
-        // the PM just has a debit of `amountEach` of each currency from us
-        // We can, in exchange, get back ERC-6909 claim tokens for `amountEach` of each currency
-        // to create a credit of `amountEach` of each currency to us
+        // the PM just has a debit of `callbackData.amount` of each currency from us
+        // We can, in exchange, get back ERC-6909 claim tokens for `callbackData.amount` of each currency
+        // to create a credit of `callbackData.amount` of each currency to us
         // that balances out the debit
 
         // We will store those claim tokens with the hook, so when swaps take place
@@ -315,7 +312,6 @@ contract DAMM is BaseHook, ReentrancyGuard, Pausable {
         // Specified Currency => The currency in which the user is specifying the amount they're swapping for
         // Unspecified Currency => The other currency
 
-
         uint8 tokenIndexFrom;
         uint8 tokenIndexTo;
 
@@ -333,7 +329,6 @@ contract DAMM is BaseHook, ReentrancyGuard, Pausable {
 
         int256 dy = swapStorage.swap( params, tokenIndexFrom, tokenIndexTo, dxInPositive, callbackData.minDy);
 
-
         //   int128(-dy) must be bnegative when int128(-params.amountSpecified) is positive
         BeforeSwapDelta beforeSwapDelta = toBeforeSwapDelta(
             int128(-params.amountSpecified), // So `specifiedAmount` = +100 (exact input : amout into poolManager )  or  -100 (exact output : amout outof poolManager )
@@ -342,7 +337,6 @@ contract DAMM is BaseHook, ReentrancyGuard, Pausable {
 
         // to do change type of fee to uint24
         return (this.beforeSwap.selector, beforeSwapDelta, uint24(swapStorage.swapFee));
-
     }
 
     /**

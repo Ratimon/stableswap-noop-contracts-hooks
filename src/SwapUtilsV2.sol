@@ -593,7 +593,6 @@ library SwapUtilsV2 {
             self.tokenPrecisionMultipliers[tokenIndexTo]);
 
         // to do: state should be in afterswap hook?
-
         self.balances[tokenIndexFrom] = balances[tokenIndexFrom] + dx;
         self.balances[tokenIndexTo] = balances[tokenIndexTo] - dy - dyAdminFee;
 
@@ -702,17 +701,12 @@ library SwapUtilsV2 {
                 "Must supply all tokens in pool"
             );
 
-            // to do: change to univ4/6909 sette/take functionality
             // Transfer tokens first to see if a fee was charged on transfer
             if (amounts[i] != 0) {
-
-                //eip6909
-
                 uint256 beforeBalance = IERC6909Claims(self.poolManager).balanceOf(
                     address(this),
                     currentId
                 );
-
                 // uint256 beforeBalance = pooledTokens[i].balanceOf(
                 //     address(this)
                 // );
@@ -734,9 +728,7 @@ library SwapUtilsV2 {
                 //     amounts[i]
                 // );
 
-
                 // Update the amounts[] with actual transfer amount
-
                 amounts[i] =
                     IERC6909Claims(self.poolManager).balanceOf(address(this), currentId) -
                     beforeBalance;
@@ -752,7 +744,6 @@ library SwapUtilsV2 {
         // invariant after change
         v.d1 = getD(_xp(newBalances, v.multipliers), v.preciseA);
         require(v.d1 > v.d0, "D should increase");
-
 
         // updated to reflect fees and calculate the user's LP tokens
         v.d2 = v.d1;

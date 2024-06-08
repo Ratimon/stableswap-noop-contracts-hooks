@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity =0.8.25;
 
-import "@forge-std/console2.sol";
+// import "@forge-std/console2.sol";
 import "@forge-std/Test.sol";
 import {IHooks} from "v4-core/interfaces/IHooks.sol";
 import {Hooks} from "v4-core/libraries/Hooks.sol";
@@ -62,16 +62,15 @@ contract DAMMTest is Test, Deployers {
         _pooledTokens[0] =  IERC20(Currency.unwrap(currency0));
         _pooledTokens[1] =  IERC20(Currency.unwrap(currency1));
 
-        // const INITIAL_A = 400
-        // const SWAP_FEE = 4e6 // 4bps 
-        // const ADMIN_FEE = 0
-
         uint8[] memory _decimals = new uint8[](2);
         _decimals[0] = uint8(18);
         _decimals[1]  = uint8(18);
 
         deployCodeTo(
             "DAMM.sol:DAMM",
+            // INITIAL_A = 400
+            // SWAP_FEE = 4e6 // 4bps 
+            // ADMIN_FEE = 0
             abi.encode(manager, _pooledTokens, _decimals, "USDC/USDT Token", "saddlepool", 200, 4e6, 0 ),
             hookAddress
         );
@@ -105,27 +104,6 @@ contract DAMMTest is Test, Deployers {
         deal(Currency.unwrap(key.currency1), bob, 10000e18);
 
         vm.stopPrank();
-
-        // vm.startPrank(alice);
-
-        // IERC20Minimal(Currency.unwrap(key.currency0)).approve(
-        //     address(hook),
-        //     type(uint).max
-        // );
-        // IERC20Minimal(Currency.unwrap(key.currency1)).approve(
-        //     address(hook),
-        //     type(uint).max
-        // );
-
-        // // We add 100 * (10^18) of liquidity of each token to the DAMM pool
-        // // The actual tokens will move into the PM
-        // // But the hook should get equivalent amount of claim tokens for each token
-        // uint256[] memory path = new uint256[](2);
-        // path[0] = 100e18;
-        // path[1] = 100e18;
-        // hook.addLiquidity(path, 0 , 100000 );
-
-        // vm.stopPrank();
        
     }
 
@@ -141,8 +119,6 @@ contract DAMMTest is Test, Deployers {
             address(hook),
             type(uint).max
         );
-
-
 
         uint256 token0ClaimID = CurrencyLibrary.toId(currency0);
         uint256 token1ClaimID = CurrencyLibrary.toId(currency1);
@@ -190,7 +166,6 @@ contract DAMMTest is Test, Deployers {
 
 
     function test_swap_exactOutput_zeroForOne() external {
-
         vm.startPrank(alice);
 
         IERC20Minimal(Currency.unwrap(key.currency0)).approve(
@@ -207,27 +182,8 @@ contract DAMMTest is Test, Deployers {
         path[1] = 1000e18;
         hook.addLiquidity(path, 0 , 100000 );
 
-
         vm.stopPrank();
         vm.startPrank(bob);
-
-        // IERC20Minimal(Currency.unwrap(key.currency0)).approve(
-        //     address(hook),
-        //     type(uint).max
-        // );
-        // IERC20Minimal(Currency.unwrap(key.currency1)).approve(
-        //     address(hook),
-        //     type(uint).max
-        // );
-
-        // IERC20Minimal(Currency.unwrap(key.currency0)).approve(
-        //     address(manager),
-        //     type(uint).max
-        // );
-        // IERC20Minimal(Currency.unwrap(key.currency1)).approve(
-        //     address(manager),
-        //     type(uint).max
-        // );
 
         IERC20Minimal(Currency.unwrap(key.currency0)).approve(
             address(swapRouter),
@@ -248,16 +204,6 @@ contract DAMMTest is Test, Deployers {
         uint balanceOfToken0Before = hook.getToken(0).balanceOf(bob);
         uint balanceOfToken1Before = hook.getToken(1).balanceOf(bob);
 
-        // uint balanceOfToken0Before2 =  hook.getToken(0).balanceOf(address(this));
-
-        // console2.log('balanceOfTokenABefore');
-        // console2.log(balanceOfToken0Before);
-        // console2.log('balanceOfTokenABefore2');
-        // console2.log(balanceOfToken0Before2);
-        // console2.log('balanceOfTokenBBefore');
-        // console2.log(balanceOfToken1Before);
-
-
         swapRouter.swap(
             key,
             IPoolManager.SwapParams({
@@ -276,12 +222,6 @@ contract DAMMTest is Test, Deployers {
 
         uint balanceOfToken0After = hook.getToken(0).balanceOf(bob);
         uint balanceOfToken1After = hook.getToken(1).balanceOf(bob);
-
-        // console2.log('balanceOfToken0After');
-        // console2.log(balanceOfToken0After);
-
-        // console2.log('balanceOfToken0After2');
-        // console2.log(balanceOfToken0After2);
 
         assertApproxEqRel(balanceOfToken1After - balanceOfToken1Before , 100e18, 0.01e18 );
         assertEq(balanceOfToken0Before - balanceOfToken0After, 100e18);
