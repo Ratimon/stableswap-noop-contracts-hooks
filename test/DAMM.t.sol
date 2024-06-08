@@ -154,13 +154,17 @@ contract DAMMTest is Test, Deployers {
         // https://github.com/Uniswap/v4-core/blob/ae86975b058d386c9be24e8994236f662affacdb/src/types/Currency.sol#L72
 
         // Swap exact input 100 Token A
-        uint balanceOfTokenABefore = key.currency0.balanceOfSelf();
-        uint balanceOfTokenBBefore = key.currency1.balanceOfSelf();
+        uint balanceOfToken0Before = key.currency0.balanceOfSelf();
+        uint balanceOfToken1Before = key.currency1.balanceOfSelf();
+
+        uint balanceOfToken0Before2 =  hook.getToken(0).balanceOf(address(this));
 
         console2.log('balanceOfTokenABefore');
-        console2.log(balanceOfTokenABefore);
+        console2.log(balanceOfToken0Before);
+        console2.log('balanceOfTokenABefore2');
+        console2.log(balanceOfToken0Before2);
         console2.log('balanceOfTokenBBefore');
-        console2.log(balanceOfTokenBBefore);
+        console2.log(balanceOfToken1Before);
 
 
         swapRouter.swap(
@@ -179,9 +183,19 @@ contract DAMMTest is Test, Deployers {
             )
         );
 
-        // uint balanceOfTokenAAfter = key.currency0.balanceOfSelf();
-        // uint balanceOfTokenBAfter = key.currency1.balanceOfSelf();
+        uint balanceOfToken0After = key.currency0.balanceOfSelf();
+        uint balanceOfToken1After = key.currency1.balanceOfSelf();
 
+        uint balanceOfToken0After2 =  hook.getToken(0).balanceOf(address(this));
+
+        console2.log('balanceOfToken0After');
+        console2.log(balanceOfToken0After);
+
+        console2.log('balanceOfToken0After2');
+        console2.log(balanceOfToken0After2);
+
+        assertApproxEqRel(balanceOfToken1After - balanceOfToken1Before , 100e18, 0.01e18 );
+        assertEq(balanceOfToken0Before - balanceOfToken0After, 100e18);
 
     }
 

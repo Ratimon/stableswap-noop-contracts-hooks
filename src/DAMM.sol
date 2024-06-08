@@ -346,6 +346,37 @@ contract DAMM is BaseHook, ReentrancyGuard, Pausable {
     }
 
     /**
+     * @notice Return address of the pooled token at given index. Reverts if tokenIndex is out of range.
+     * @param index the index of the token
+     * @return address of the token at given index
+     */
+    function getToken(uint8 index) public view virtual returns (IERC20) {
+        require(index < swapStorage.pooledTokens.length, "Out of range");
+        return swapStorage.pooledTokens[index];
+    }
+
+    /**
+     * @notice Return the index of the given token address. Reverts if no matching
+     * token is found.
+     * @param tokenAddress address of the token
+     * @return the index of the given token address
+     */
+    function getTokenIndex(address tokenAddress)
+        public
+        view
+        virtual
+        returns (uint8)
+    {
+        uint8 index = tokenIndexes[tokenAddress];
+        require(
+            address(getToken(index)) == tokenAddress,
+            "Token does not exist"
+        );
+        return index;
+    }
+
+
+    /**
      * @notice Return current balance of the pooled token at given index
      * @param index the index of the token
      * @return current balance of the pooled token at given index with token's native precision
