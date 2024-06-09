@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity =0.8.25;
 
-import {console2} from  "@forge-std/console2.sol";
 
 import {IPoolManager} from "v4-core/interfaces/IPoolManager.sol";
 import {IERC6909Claims} from "v4-core/interfaces/external/IERC6909Claims.sol";
@@ -853,18 +852,7 @@ library SwapUtilsV2 {
 
         }
 
-        console2.log("msg.sender");
-        console2.log(msg.sender);
-        console2.log( "lpToken.balanceOf(msg.sender)") ;
-        console2.log( lpToken.balanceOf(msg.sender)) ;
-
         lpToken.burnFrom(msg.sender, amount);
-        // lpToken.burnFrom(address(this), amount);
-
-        console2.log( "lpToken.balanceOf(msg.sender)") ;
-        console2.log( lpToken.balanceOf(msg.sender)) ;
-
-
 
         emit RemoveLiquidity(msg.sender, amounts, totalSupply - amount);
 
