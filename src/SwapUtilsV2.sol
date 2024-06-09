@@ -7,7 +7,7 @@ import {IERC6909Claims} from "v4-core/interfaces/external/IERC6909Claims.sol";
 
 import {PoolKey} from "v4-core/types/PoolKey.sol";
 import {Currency, CurrencyLibrary} from "v4-core/types/Currency.sol";
-import {CurrencySettleTake} from "v4-core/libraries/CurrencySettleTake.sol";
+import {CurrencySettler} from "v4-core-test/utils/CurrencySettler.sol";
 
 import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {AmplificationUtilsV2} from "@main/AmplificationUtilsV2.sol";
@@ -26,7 +26,7 @@ import {MathUtilsV1} from  "@main/MathUtilsV1.sol";
 library SwapUtilsV2 {
     using SafeERC20 for IERC20;
     using CurrencyLibrary for Currency;
-    using CurrencySettleTake for Currency;
+    using CurrencySettler for Currency;
     using MathUtilsV1 for uint256;
 
     /*** EVENTS ***/

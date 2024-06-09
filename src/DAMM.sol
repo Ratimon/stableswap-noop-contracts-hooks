@@ -6,7 +6,7 @@ import {IHooks} from "v4-core/interfaces/IHooks.sol";
 
 import {PoolKey} from "v4-core/types/PoolKey.sol";
 import {Currency} from "v4-core/types/Currency.sol";
-import {CurrencySettleTake} from "v4-core/libraries/CurrencySettleTake.sol";
+import {CurrencySettler} from "v4-core-test/utils/CurrencySettler.sol";
 import {Hooks} from "v4-core/libraries/Hooks.sol";
 import {BeforeSwapDelta, toBeforeSwapDelta} from "v4-core/types/BeforeSwapDelta.sol";
 import {BaseHook} from "@main/univ4/BaseHook.sol";
@@ -21,7 +21,7 @@ import {AmplificationUtilsV2} from  "@main/AmplificationUtilsV2.sol";
 
 contract DAMM is BaseHook, ReentrancyGuard, Pausable {
 
-    using CurrencySettleTake for Currency;
+    using CurrencySettler for Currency;
 
     using SafeERC20 for IERC20;
     // to do : remove scatch work

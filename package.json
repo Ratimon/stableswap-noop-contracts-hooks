@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "prepare": "rm -rf lib/ && forge install --no-git foundry-rs/forge-std@v1.8.0 Uniswap/v4-core || echo '' ",
+    "prepare": "rm -rf lib/ && forge install --no-git foundry-rs/forge-std@v1.8.0 Uniswap/v4-core@ae86975 || echo '' ",
     "build": "forge build",
     "clean": "rm -rf cache out"
   },

@@ -16,6 +16,7 @@ The features include:
 ### Quick Installation
 
 ```bash
+nvm use v20.12.2
 git clone <the repo link>
 cd <the directory>
 pnpm i 
