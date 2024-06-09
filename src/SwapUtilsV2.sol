@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity =0.8.25;
 
-
 import {IPoolManager} from "v4-core/interfaces/IPoolManager.sol";
 import {IERC6909Claims} from "v4-core/interfaces/external/IERC6909Claims.sol";
 
@@ -126,62 +125,6 @@ library SwapUtilsV2 {
         return self.adminFee;
     }
 
-
-    /**
-     * @notice Calculate the price of a token in the pool with given
-     * precision-adjusted balances and a particular D.
-     *
-     * @dev This is accomplished via solving the invariant iteratively.
-     * See the StableSwap paper and Curve.fi implementation for further details.
-     *
-     * x_1**2 + x1 * (sum' - (A*n**n - 1) * D / (A * n**n)) = D ** (n + 1) / (n ** (2 * n) * prod' * A)
-     * x_1**2 + b*x_1 = c
-     * x_1 = (x_1**2 + c) / (2*x_1 + b)
-     *
-     * @param a the amplification coefficient * n * (n - 1). See the StableSwap paper for details.
-     * @param tokenIndex Index of token we are calculating for.
-     * @param xp a precision-adjusted set of pool balances. Array should be
-     * the same cardinality as the pool.
-     * @param d the stableswap invariant
-     * @return the price of the token, in the same precision as in xp
-     */
-    function getYD(
-        uint256 a,
-        uint8 tokenIndex,
-        uint256[] memory xp,
-        uint256 d
-    ) internal pure returns (uint256) {
-        uint256 numTokens = xp.length;
-        require(tokenIndex < numTokens, "Token not found");
-
-        uint256 c = d;
-        uint256 s;
-        uint256 nA = a * (numTokens);
-
-        for (uint256 i = 0; i < numTokens; i++) {
-            if (i != tokenIndex) {
-                s = s + xp[i];
-                c = (c * d) / (xp[i] * (numTokens));
-                // If we were to protect the division loss we would have to keep the denominator separate
-                // and divide at the end. However this leads to overflow with large numTokens or/and D.
-                // c = c * D * D * D * ... overflow!
-            }
-        }
-        c = (c * d * AmplificationUtilsV2.A_PRECISION) / (nA * numTokens);
-
-        uint256 b = s + ((d * AmplificationUtilsV2.A_PRECISION) / nA);
-        uint256 yPrev;
-        uint256 y = d;
-        for (uint256 i = 0; i < MAX_LOOP_LIMIT; i++) {
-            yPrev = y;
-            y = ((y * y) + c) / ((y * 2) + b - d);
-            if (y.within1(yPrev)) {
-                return y;
-            }
-        }
-        revert("Approximation did not converge");
-    }
-
     /**
      * @notice Get D, the StableSwap invariant, based on a set of balances and a particular A.
      * @param xp a precision-adjusted set of pool balances. Array should be the same cardinality
@@ -275,25 +218,6 @@ library SwapUtilsV2 {
      */
     function _xp(Swap storage self) internal view returns (uint256[] memory) {
         return _xp(self.balances, self.tokenPrecisionMultipliers);
-    }
-
-    /**
-     * @notice Get the virtual price, to help calculate profit
-     * @param self Swap struct to read from
-     * @return the virtual price, scaled to precision of POOL_PRECISION_DECIMALS
-     */
-    function getVirtualPrice(Swap storage self)
-        external
-        view
-        returns (uint256)
-    {
-        uint256 d = getD(_xp(self), _getAPrecise(self));
-        LPTokenV2 lpToken = self.lpToken;
-        uint256 supply = lpToken.totalSupply();
-        if (supply > 0) {
-            return (d * (10**uint256(POOL_PRECISION_DECIMALS))) / supply;
-        }
-        return 0;
     }
 
     /**
