@@ -118,6 +118,15 @@ library SwapUtilsV2 {
         return AmplificationUtilsV2._getAPrecise(self);
     }
 
+    function _getSwapFee(Swap storage self) internal view returns (uint256) {
+        return self.swapFee;
+    }
+
+    function _getAdminFee(Swap storage self) internal view returns (uint256) {
+        return self.adminFee;
+    }
+
+
     /**
      * @notice Calculate the price of a token in the pool with given
      * precision-adjusted balances and a particular D.

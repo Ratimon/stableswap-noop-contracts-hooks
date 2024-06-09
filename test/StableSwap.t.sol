@@ -22,8 +22,6 @@ import { SwapUtilsV2, LPTokenV2} from "@main/SwapUtilsV2.sol";
 
 contract StableSwapTest is Test, Deployers {
 
-
-
     using PoolIdLibrary for PoolId;
     using CurrencyLibrary for Currency;
 
@@ -341,7 +339,6 @@ contract StableSwapTest is Test, Deployers {
 
         vm.warp({newTimestamp: staticTime + 2 days});
 
-        
         vm.expectEmit({checkTopic1: true, checkTopic2: true, checkTopic3: true, checkData: true});
         emit RampA(20000, 40000, 172801 , 1728000 );
         hook.rampA(400, 20 days);
@@ -352,6 +349,27 @@ contract StableSwapTest is Test, Deployers {
 
         vm.stopPrank();
 
+    }
+
+    function test_setAdminFee() external {
+        vm.startPrank(deployer);
+        assertEq(hook.getAdminFee(), 0);
+
+        hook.setAdminFee(1e6);
+
+        assertEq(hook.getAdminFee(), 1e6);
+        vm.stopPrank();
+
+    }
+
+    function test_setSwapFee() external {
+        vm.startPrank(deployer);
+        assertEq(hook.getSwapFee(), 4e6);
+
+        hook.setSwapFee(5e6);
+
+        assertEq(hook.getSwapFee(), 5e6);
+        vm.stopPrank();
     }
 
 }

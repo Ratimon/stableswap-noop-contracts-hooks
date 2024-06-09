@@ -279,9 +279,8 @@ contract StableSwap is BaseHook, ReentrancyGuard, Pausable, Ownable {
 
             // Since we didn't go through the regular "modify liquidity" flow,
             // the PM just has a debit of `callbackData.amount` of each currency from us
-            // We can, in exchange, get back ERC-6909 claim tokens for `callbackData.amount` of each currency
-            // to create a credit of `callbackData.amount` of each currency to us
-            // that balances out the debit
+            // We can, in exchange, get back ERC-6909 claim tokens for `callbackData.amount`
+            // to create a credit of `callbackData.amount` of each currency to us that balances out the debit
 
             // We will store those claim tokens with the hook, so when swaps take place
             // liquidity from our CSMM can be used by minting/burning claim tokens the hook owns
@@ -291,7 +290,6 @@ contract StableSwap is BaseHook, ReentrancyGuard, Pausable, Ownable {
                 callbackData.amount,
                 true // `mint` = `true` i.e. we're minting claim tokens for the hook, equivalent to money we just deposited to the PM
             );
-
         } else {
 
             callbackData.currency.settle(
@@ -327,10 +325,8 @@ contract StableSwap is BaseHook, ReentrancyGuard, Pausable, Ownable {
         SwapUtilsV2.SwapCallbackData memory callbackData = abi.decode(data, (SwapUtilsV2.SwapCallbackData));
         require(block.timestamp <= callbackData.deadline, "Deadline not met");
 
-        // futher modifier? ie. deadlineCheck
-        // ? do we really need the assertion of key ie .require( ....)
+        // to do :? do we really need the assertion of key ie .require( ....)
 
-        // if (callbackData.minDy >= 0) revert SwapExactOutputNotAllowed();
         if (params.amountSpecified >= 0) revert SwapExactOutputNotAllowed();
 
         uint256 dxInPositive = params.amountSpecified > 0
@@ -350,15 +346,11 @@ contract StableSwap is BaseHook, ReentrancyGuard, Pausable, Ownable {
         uint8 tokenIndexTo;
 
         if (params.zeroForOne) {
-
             tokenIndexFrom = 0;
             tokenIndexTo = 1;
-
         } else {
-
             tokenIndexFrom = 1;
             tokenIndexTo = 0;
-
         }
 
         int256 dy = swapStorage.swap( params, tokenIndexFrom, tokenIndexTo, dxInPositive, callbackData.minDy);
@@ -391,6 +383,14 @@ contract StableSwap is BaseHook, ReentrancyGuard, Pausable, Ownable {
      */
     function getAPrecise() external view virtual returns (uint256) {
         return swapStorage.getAPrecise();
+    }
+
+    function getSwapFee() external view virtual returns (uint256) {
+        return swapStorage._getSwapFee();
+    }
+
+    function getAdminFee() external view virtual returns (uint256) {
+        return swapStorage._getAdminFee();
     }
 
     function getLpToken() public view virtual returns (LPTokenV2) {
