@@ -19,7 +19,7 @@ import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import { SwapUtilsV2, LPTokenV2} from "@main/SwapUtilsV2.sol";
 import {AmplificationUtilsV2} from  "@main/AmplificationUtilsV2.sol";
 
-contract DAMM is BaseHook, ReentrancyGuard, Pausable {
+contract StableSwap is BaseHook, ReentrancyGuard, Pausable {
 
     using CurrencySettler for Currency;
 

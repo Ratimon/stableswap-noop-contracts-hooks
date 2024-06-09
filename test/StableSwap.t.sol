@@ -17,10 +17,10 @@ import {IERC20Minimal} from "v4-core/interfaces/external/IERC20Minimal.sol";
 
 import {IERC20} from  "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
-import {DAMM} from "@main/DAMM.sol";
+import {StableSwap} from "@main/StableSwap.sol";
 import { SwapUtilsV2, LPTokenV2} from "@main/SwapUtilsV2.sol";
 
-contract DAMMTest is Test, Deployers {
+contract StableSwapTest is Test, Deployers {
 
     using PoolIdLibrary for PoolId;
     using CurrencyLibrary for Currency;
@@ -33,7 +33,7 @@ contract DAMMTest is Test, Deployers {
     address public deployer = address(15);
 
     LPTokenV2 lpToken;
-    DAMM hook;
+    StableSwap hook;
 
     function setUp() public {
         vm.label(deployer, "Deployer");
@@ -67,7 +67,7 @@ contract DAMMTest is Test, Deployers {
         _decimals[1]  = uint8(18);
 
         deployCodeTo(
-            "DAMM.sol:DAMM",
+            "StableSwap.sol:StableSwap",
             // INITIAL_A = 400
             // SWAP_FEE = 4e6 // 4bps 
             // ADMIN_FEE = 0
@@ -75,7 +75,7 @@ contract DAMMTest is Test, Deployers {
             hookAddress
         );
 
-        hook = DAMM(hookAddress);
+        hook = StableSwap(hookAddress);
         vm.label( address(hook.getLpToken()) , "Lp Token");
 
         (key, ) = initPool(
@@ -145,7 +145,7 @@ contract DAMMTest is Test, Deployers {
         assertEq(hook.getLpToken().totalSupply(), 0e18);
         assertEq(balanceOfLpTokenBefore, 0e18);
 
-        // We add 100 * (10^18) of liquidity of each token to the DAMM pool
+        // We add 100 * (10^18) of liquidity of each token to the StableSwap pool
         // The actual tokens will move into the PM But the hook should get equivalent amount of claim tokens for each token
         uint256[] memory path = new uint256[](2);
         path[0] = 100e18;
@@ -190,7 +190,7 @@ contract DAMMTest is Test, Deployers {
             type(uint).max
         );
 
-        // We add 100 * (10^18) of liquidity of each token to the DAMM pool
+        // We add 100 * (10^18) of liquidity of each token to the StableSwap pool
         // The actual tokens will move into the PM
         // But the hook should get equivalent amount of claim tokens for each token
         uint256[] memory path = new uint256[](2);

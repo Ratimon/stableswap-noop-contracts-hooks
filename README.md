@@ -2,7 +2,7 @@
 
 It is a NoOp hook that overrides the Uniswap V4 M's own logic including adding/removing liauidity and swap.
 
-This solidity implementation utilizes **StableSwap** curve. More detail should be found at this (Paper)[https://www.curve.fi/stableswap-paper.pdf].
+This solidity implementation utilizes **StableSwap** curve. More detail should be found at this [paper](https://www.curve.fi/stableswap-paper.pdf).
 
 The features include:
 
