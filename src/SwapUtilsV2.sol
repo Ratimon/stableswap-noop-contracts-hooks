@@ -668,6 +668,7 @@ library SwapUtilsV2 {
     ) external returns (uint256) {
 
         // to do : remove  self.pooledTokens? as we have already modify to Uni's Currency
+        //  to do : pool.checkPoolInitialized(); ?
 
         IERC20[] memory pooledTokens = self.pooledTokens;
         require(
