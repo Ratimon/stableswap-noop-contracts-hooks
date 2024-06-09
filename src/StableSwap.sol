@@ -15,11 +15,12 @@ import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeE
 import {Clones} from "@openzeppelin/contracts/proxy/Clones.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
+import {Ownable} from  "@openzeppelin/contracts/access/Ownable.sol";
 
 import { SwapUtilsV2, LPTokenV2} from "@main/SwapUtilsV2.sol";
 import {AmplificationUtilsV2} from  "@main/AmplificationUtilsV2.sol";
 
-contract StableSwap is BaseHook, ReentrancyGuard, Pausable {
+contract StableSwap is BaseHook, ReentrancyGuard, Pausable, Ownable {
 
     using CurrencySettler for Currency;
 
@@ -70,7 +71,9 @@ contract StableSwap is BaseHook, ReentrancyGuard, Pausable {
         uint256 _a,
         uint256 _fee,
         uint256 _adminFee
-        ) BaseHook(_poolManager) payable {
+        ) BaseHook(_poolManager) Ownable(msg.sender) payable {
+        // todo configre Ownable's params
+
         // Check _pooledTokens and precisions parameter
         require(_pooledTokens.length == 2, "_pooledTokens.length == 2");
 
@@ -304,12 +307,7 @@ contract StableSwap is BaseHook, ReentrancyGuard, Pausable {
                 callbackData.amount,
                 false // mint` = `true` i.e. we're  claiming erc20
             );
-
-            
         }
-
-
-
         return "";
     }
 
@@ -365,14 +363,34 @@ contract StableSwap is BaseHook, ReentrancyGuard, Pausable {
 
         int256 dy = swapStorage.swap( params, tokenIndexFrom, tokenIndexTo, dxInPositive, callbackData.minDy);
 
-        //   int128(-dy) must be bnegative when int128(-params.amountSpecified) is positive
+        // int128(-dy) must be negative when int128(-params.amountSpecified) is positive
         BeforeSwapDelta beforeSwapDelta = toBeforeSwapDelta(
             int128(-params.amountSpecified), // So `specifiedAmount` = +100 (exact input : amout into poolManager )  or  -100 (exact output : amout outof poolManager )
             int128(-dy) // Unspecified amount (output delta) = -100 (  amout out of poolManager )  / 100 ( amout into poolManager ) 
         );
 
-        // to do change type of fee to uint24
+        // to do : change type of fee to uint24
         return (this.beforeSwap.selector, beforeSwapDelta, uint24(swapStorage.swapFee));
+    }
+
+    /*** VIEW FUNCTIONS ***/
+
+    /**
+     * @notice Return A, the amplification coefficient * n * (n - 1)
+     * @dev See the StableSwap paper for details
+     * @return A parameter
+     */
+    function getA() external view virtual returns (uint256) {
+        return swapStorage.getA();
+    }
+
+    /**
+     * @notice Return A in its raw precision form
+     * @dev See the StableSwap paper for details
+     * @return A parameter in its raw precision form
+     */
+    function getAPrecise() external view virtual returns (uint256) {
+        return swapStorage.getAPrecise();
     }
 
     function getLpToken() public view virtual returns (LPTokenV2) {
@@ -423,6 +441,53 @@ contract StableSwap is BaseHook, ReentrancyGuard, Pausable {
     {
         require(index < swapStorage.pooledTokens.length, "Index out of range");
         return swapStorage.balances[index];
+    }
+
+    /*** ADMIN FUNCTIONS ***/
+
+    /**
+     * @notice Withdraw all admin fees to the contract owner
+     */
+    function withdrawAdminFees() external payable virtual onlyOwner {
+        swapStorage.withdrawAdminFees(owner());
+    }
+
+    /**
+     * @notice Update the admin fee. Admin fee takes portion of the swap fee.
+     * @param newAdminFee new admin fee to be applied on future transactions
+     */
+    function setAdminFee(uint256 newAdminFee) external payable onlyOwner {
+        swapStorage.setAdminFee(newAdminFee);
+    }
+
+    /**
+     * @notice Update the swap fee to be applied on swaps
+     * @param newSwapFee new swap fee to be applied on future transactions
+     */
+    function setSwapFee(uint256 newSwapFee) external payable onlyOwner {
+        swapStorage.setSwapFee(newSwapFee);
+    }
+
+    /**
+     * @notice Start ramping up or down A parameter towards given futureA and futureTime
+     * Checks if the change is too rapid, and commits the new A value only when it falls under
+     * the limit range.
+     * @param futureA the new A to ramp towards
+     * @param futureTime timestamp when the new A should be reached
+     */
+    function rampA(uint256 futureA, uint256 futureTime)
+        external
+        payable
+        onlyOwner
+    {
+        swapStorage.rampA(futureA, futureTime);
+    }
+
+    /**
+     * @notice Stop ramping A immediately. Reverts if ramp A is already stopped.
+     */
+    function stopRampA() external payable onlyOwner {
+        swapStorage.stopRampA();
     }
 
 }

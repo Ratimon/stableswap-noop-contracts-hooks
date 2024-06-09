@@ -22,10 +22,13 @@ import { SwapUtilsV2, LPTokenV2} from "@main/SwapUtilsV2.sol";
 
 contract StableSwapTest is Test, Deployers {
 
+
+
     using PoolIdLibrary for PoolId;
     using CurrencyLibrary for Currency;
 
-    
+    uint256 public staticTime;
+
     address public alice = address(11);
     address public bob = address(12);
     // address public carol = address(13);
@@ -36,6 +39,9 @@ contract StableSwapTest is Test, Deployers {
     StableSwap hook;
 
     function setUp() public {
+
+        staticTime = block.timestamp;
+
         vm.label(deployer, "Deployer");
         vm.label(alice, "Alice");
         vm.label(bob, "Bob");
@@ -68,7 +74,7 @@ contract StableSwapTest is Test, Deployers {
 
         deployCodeTo(
             "StableSwap.sol:StableSwap",
-            // INITIAL_A = 400
+            // INITIAL_A = 200
             // SWAP_FEE = 4e6 // 4bps 
             // ADMIN_FEE = 0
             abi.encode(manager, _pooledTokens, _decimals, "USDC/USDT Token", "saddlepool", 200, 4e6, 0 ),
@@ -315,6 +321,34 @@ contract StableSwapTest is Test, Deployers {
 
         assertApproxEqRel(balanceOfToken1After - balanceOfToken1Before , 100e18, 0.01e18 );
         assertEq(balanceOfToken0Before - balanceOfToken0After, 100e18);
+
+        vm.stopPrank();
+
+    }
+
+    event RampA(
+        uint256 oldA,
+        uint256 newA,
+        uint256 initialTime,
+        uint256 futureTime
+    );
+
+    function test_rampA() external {
+        vm.startPrank(deployer);
+
+        assertEq(hook.getAPrecise(), 20000);
+        assertEq(hook.getA(), 200);
+
+        vm.warp({newTimestamp: staticTime + 2 days});
+
+        
+        vm.expectEmit({checkTopic1: true, checkTopic2: true, checkTopic3: true, checkData: true});
+        emit RampA(20000, 40000, 172801 , 1728000 );
+        hook.rampA(400, 20 days);
+
+        // todo fuzzing to see real change
+        assertEq(hook.getAPrecise(), 20000);
+        assertEq(hook.getA(), 200);
 
         vm.stopPrank();
 
