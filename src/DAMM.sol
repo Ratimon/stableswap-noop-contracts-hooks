@@ -26,7 +26,7 @@ contract DAMM is BaseHook, ReentrancyGuard, Pausable {
     using SafeERC20 for IERC20;
     // to do : remove scatch work
     using SwapUtilsV2 for SwapUtilsV2.Swap;
-    using SwapUtilsV2 for SwapUtilsV2.AddLiquidityCallbackData;
+    using SwapUtilsV2 for SwapUtilsV2.LiquidityCallbackData;
     using SwapUtilsV2 for SwapUtilsV2.SwapCallbackData;
     using AmplificationUtilsV2 for SwapUtilsV2.Swap;
 
@@ -210,17 +210,7 @@ contract DAMM is BaseHook, ReentrancyGuard, Pausable {
         revert AddLiquidityThroughHookNotAllowed();
     }
 
-    // when deposit
-    //     data.currency.take(manager, data.user, data.amount, true); // mint 6909
-    //     data.currency.settle(manager, data.user, data.amount, false); // transfer ERC20
-    // when withdraw
-    //     data.currency.settle(manager, data.user, data.amount, true); // burn 6909
-    //     data.currency.take(manager, data.user, data.amount, false); // claim ERC20
-
-
-    // to do modify to comply with univ4 data stucture
-    // ie. remove total supply 
-    // Customized add liquidity with totalSupply/ transferFrom / balanceOf
+    // to do : check if amounts ordering is compatible with stored data
     function addLiquidity(
         uint256[] calldata amounts,
         uint256 minToMint,
@@ -234,6 +224,7 @@ contract DAMM is BaseHook, ReentrancyGuard, Pausable {
         returns (uint256)
     {
         require(block.timestamp <= deadline, "Deadline not met");
+
         //to do assert if key already init ?
         //to do assert if key in constructor is correct or not ?
 
@@ -241,38 +232,83 @@ contract DAMM is BaseHook, ReentrancyGuard, Pausable {
 
     }
 
+    /**
+     * @notice Burn LP tokens to remove liquidity from the pool.
+     * @dev Liquidity can always be removed, even when the pool is paused.
+     * @param amount the amount of LP tokens to burn
+     * @param minAmounts the minimum amounts of each token in the pool
+     *        acceptable for this burn. Useful as a front-running mitigation
+     * @param deadline latest timestamp to accept this transaction
+     * @return amounts of tokens user received
+     */
+    function removeLiquidity(
+        uint256 amount,
+        uint256[] calldata minAmounts,
+        uint256 deadline
+    )
+        external
+        payable
+        virtual
+        nonReentrant
+        returns (uint256[] memory)
+    {
+        require(block.timestamp <= deadline, "Deadline not met");
+        return swapStorage.removeLiquidity(amount, minAmounts);
+    }
+
+
     function unlockCallback(
         bytes calldata data
     ) external override returns (bytes memory) {
 
-        SwapUtilsV2.AddLiquidityCallbackData memory callbackData = abi.decode(data, (SwapUtilsV2.AddLiquidityCallbackData));
+        SwapUtilsV2.LiquidityCallbackData memory callbackData = abi.decode(data, (SwapUtilsV2.LiquidityCallbackData));
         require(msg.sender == callbackData.poolManager );
 
-        // to do : add if else for addLiqudity or ..
+        if (callbackData.isAdd) {
+            // Settle `callbackData.amount` of each currency from the sender
+            // i.e. Create a debit of `callbackData.amount` of each currency with the Pool Manager
+            callbackData.currency.settle(
+                IPoolManager(callbackData.poolManager),
+                callbackData.sender,
+                callbackData.amount,
+                false // `burn` = `false` i.e. we're actually transferring tokens, not burning ERC-6909 Claim Tokens
+            );
 
-        // Settle `callbackData.amount` of each currency from the sender
-        // i.e. Create a debit of `callbackData.amount` of each currency with the Pool Manager
-        callbackData.currency.settle(
-            IPoolManager(callbackData.poolManager),
-            callbackData.sender,
-            callbackData.amount,
-            false // `burn` = `false` i.e. we're actually transferring tokens, not burning ERC-6909 Claim Tokens
-        );
+            // Since we didn't go through the regular "modify liquidity" flow,
+            // the PM just has a debit of `callbackData.amount` of each currency from us
+            // We can, in exchange, get back ERC-6909 claim tokens for `callbackData.amount` of each currency
+            // to create a credit of `callbackData.amount` of each currency to us
+            // that balances out the debit
 
-        // Since we didn't go through the regular "modify liquidity" flow,
-        // the PM just has a debit of `callbackData.amount` of each currency from us
-        // We can, in exchange, get back ERC-6909 claim tokens for `callbackData.amount` of each currency
-        // to create a credit of `callbackData.amount` of each currency to us
-        // that balances out the debit
+            // We will store those claim tokens with the hook, so when swaps take place
+            // liquidity from our CSMM can be used by minting/burning claim tokens the hook owns
+            callbackData.currency.take(
+                IPoolManager(callbackData.poolManager),
+                address(this),
+                callbackData.amount,
+                true // `mint` = `true` i.e. we're minting claim tokens for the hook, equivalent to money we just deposited to the PM
+            );
 
-        // We will store those claim tokens with the hook, so when swaps take place
-        // liquidity from our CSMM can be used by minting/burning claim tokens the hook owns
-        callbackData.currency.take(
-            IPoolManager(callbackData.poolManager),
-            address(this),
-            callbackData.amount,
-            true // true = mint claim tokens for the hook, equivalent to money we just deposited to the PM
-        );
+        } else {
+
+            callbackData.currency.settle(
+                IPoolManager(callbackData.poolManager),
+                address(this),
+                callbackData.amount,
+                true // `burn` = `true` i.e. we're  burning ERC-6909 Claim Tokens
+            );
+
+            callbackData.currency.take(
+                IPoolManager(callbackData.poolManager),
+                callbackData.sender, // ?
+                callbackData.amount,
+                false // mint` = `true` i.e. we're  claiming erc20
+            );
+
+            
+        }
+
+
 
         return "";
     }
@@ -337,6 +373,10 @@ contract DAMM is BaseHook, ReentrancyGuard, Pausable {
 
         // to do change type of fee to uint24
         return (this.beforeSwap.selector, beforeSwapDelta, uint24(swapStorage.swapFee));
+    }
+
+    function getLpToken() public view virtual returns (LPTokenV2) {
+        return swapStorage.lpToken;
     }
 
     /**

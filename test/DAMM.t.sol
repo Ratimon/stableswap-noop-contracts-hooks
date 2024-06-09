@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity =0.8.25;
 
-// import "@forge-std/console2.sol";
+import {console2} from  "@forge-std/console2.sol";
 import "@forge-std/Test.sol";
 import {IHooks} from "v4-core/interfaces/IHooks.sol";
 import {Hooks} from "v4-core/libraries/Hooks.sol";
@@ -76,6 +76,7 @@ contract DAMMTest is Test, Deployers {
         );
 
         hook = DAMM(hookAddress);
+        vm.label( address(hook.getLpToken()) , "Lp Token");
 
         (key, ) = initPool(
             currency0,
@@ -107,8 +108,7 @@ contract DAMMTest is Test, Deployers {
        
     }
 
-
-    function test_claimTokenBalances() external {
+    function test_addLiquidity() external {
         vm.startPrank(alice);
 
         IERC20Minimal(Currency.unwrap(key.currency0)).approve(
@@ -138,9 +138,9 @@ contract DAMMTest is Test, Deployers {
         assertEq(hook.getTokenBalance(0), 0e18);
         assertEq(hook.getTokenBalance(1), 0e18);
 
+
         // We add 100 * (10^18) of liquidity of each token to the DAMM pool
-        // The actual tokens will move into the PM
-        // But the hook should get equivalent amount of claim tokens for each token
+        // The actual tokens will move into the PM But the hook should get equivalent amount of claim tokens for each token
         uint256[] memory path = new uint256[](2);
         path[0] = 100e18;
         path[1] = 100e18;
@@ -160,6 +160,82 @@ contract DAMMTest is Test, Deployers {
 
         assertEq(hook.getTokenBalance(0), 100e18);
         assertEq(hook.getTokenBalance(1), 100e18);
+
+        vm.stopPrank();
+    }
+
+    function test_removeLiquidity() external {
+        vm.startPrank(alice);
+
+        IERC20Minimal(Currency.unwrap(key.currency0)).approve(
+            address(hook),
+            type(uint).max
+        );
+        IERC20Minimal(Currency.unwrap(key.currency1)).approve(
+            address(hook),
+            type(uint).max
+        );
+
+        // We add 100 * (10^18) of liquidity of each token to the DAMM pool
+        // The actual tokens will move into the PM
+        // But the hook should get equivalent amount of claim tokens for each token
+        uint256[] memory path = new uint256[](2);
+        path[0] = 100e18;
+        path[1] = 100e18;
+        hook.addLiquidity(path, 0 , 100000 );
+
+        uint256 token0ClaimID = CurrencyLibrary.toId(currency0);
+        uint256 token1ClaimID = CurrencyLibrary.toId(currency1);
+
+        uint256 token0ClaimsBalanceBefore = manager.balanceOf(
+            address(hook),
+            token0ClaimID
+        );
+        uint256 token1ClaimsBalanceBefore = manager.balanceOf(
+            address(hook),
+            token1ClaimID
+        );
+
+        assertEq(token0ClaimsBalanceBefore, 100e18);
+        assertEq(token1ClaimsBalanceBefore, 100e18);
+
+        assertEq(hook.getTokenBalance(0), 100e18);
+        assertEq(hook.getTokenBalance(1), 100e18);
+
+        uint balanceOfToken0Before = hook.getToken(0).balanceOf(alice);
+        uint balanceOfToken1Before = hook.getToken(1).balanceOf(alice);
+        uint balanceOfLpTokenBefore = hook.getLpToken().balanceOf(alice);
+
+        assertEq(hook.getLpToken().totalSupply(), 200e18);
+        assertEq(balanceOfLpTokenBefore, 200e18);
+       
+        uint256[] memory minAmounts = new uint256[](2);
+        path[0] = 50e18;
+        path[1] = 50e18;
+
+        IERC20(address(hook.getLpToken())).approve(address(hook),type(uint).max);
+        hook.removeLiquidity(120e18 , minAmounts , 100000 );
+
+        uint256 token0ClaimsBalanceAfter = manager.balanceOf(
+            address(hook),
+            token0ClaimID
+        );
+        uint256 token1ClaimsBalanceAfter = manager.balanceOf(
+            address(hook),
+            token1ClaimID
+        );
+
+        assertEq(token0ClaimsBalanceAfter, 40e18);
+        assertEq(token1ClaimsBalanceAfter, 40e18);
+
+        uint balanceOfToken0After = hook.getToken(0).balanceOf(alice);
+        uint balanceOfToken1After = hook.getToken(1).balanceOf(alice);
+        uint balanceOfLpTokenAfter = hook.getLpToken().balanceOf(alice);
+
+        assertEq( balanceOfToken0After - balanceOfToken0Before ,  60e18 );
+        assertEq( balanceOfToken1After -  balanceOfToken1Before, 60e18 );
+        assertEq( balanceOfLpTokenBefore -  balanceOfLpTokenAfter, 120e18 );
+
 
         vm.stopPrank();
     }

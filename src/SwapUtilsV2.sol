@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity =0.8.25;
 
+import {console2} from  "@forge-std/console2.sol";
+
 import {IPoolManager} from "v4-core/interfaces/IPoolManager.sol";
 import {IERC6909Claims} from "v4-core/interfaces/external/IERC6909Claims.sol";
 
@@ -643,11 +645,12 @@ library SwapUtilsV2 {
         return int256(dy);
     }
 
-    struct AddLiquidityCallbackData {
+    struct LiquidityCallbackData {
         uint256 amount;
         Currency currency;
         address sender;
         address poolManager;
+        bool isAdd;
     }
 
     /**
@@ -694,6 +697,8 @@ library SwapUtilsV2 {
 
         for (uint256 i = 0; i < pooledTokens.length; i++) {
 
+            // to do : check currentId if sorted? how to link with tokenIndex
+
             uint currentId = i == 0 ? self.poolKey.currency0.toId() : self.poolKey.currency1.toId();
 
             require(
@@ -713,11 +718,12 @@ library SwapUtilsV2 {
 
                 IPoolManager(self.poolManager).unlock(
                     abi.encode(
-                        AddLiquidityCallbackData(
+                        LiquidityCallbackData(
                             amounts[i],
                             CurrencyLibrary.fromId(currentId),
                             msg.sender,
-                            self.poolManager
+                            self.poolManager,
+                            true
                         )
                     )
                 );
@@ -828,10 +834,37 @@ library SwapUtilsV2 {
         for (uint256 i = 0; i < amounts.length; i++) {
             require(amounts[i] >= minAmounts[i], "amounts[i] < minAmounts[i]");
             self.balances[i] = balances[i] - amounts[i];
-            pooledTokens[i].safeTransfer(msg.sender, amounts[i]);
+
+            uint currentId = i == 0 ? self.poolKey.currency0.toId() : self.poolKey.currency1.toId();
+
+            // 6909 functiinality
+            IPoolManager(self.poolManager).unlock(
+                    abi.encode(
+                        LiquidityCallbackData(
+                            amounts[i],
+                            CurrencyLibrary.fromId(currentId),
+                            msg.sender,
+                            self.poolManager,
+                            false
+                        )
+                    )
+            );
+            // pooledTokens[i].safeTransfer(msg.sender, amounts[i]);
+
         }
 
+        console2.log("msg.sender");
+        console2.log(msg.sender);
+        console2.log( "lpToken.balanceOf(msg.sender)") ;
+        console2.log( lpToken.balanceOf(msg.sender)) ;
+
         lpToken.burnFrom(msg.sender, amount);
+        // lpToken.burnFrom(address(this), amount);
+
+        console2.log( "lpToken.balanceOf(msg.sender)") ;
+        console2.log( lpToken.balanceOf(msg.sender)) ;
+
+
 
         emit RemoveLiquidity(msg.sender, amounts, totalSupply - amount);
 
