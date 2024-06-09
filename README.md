@@ -1,4 +1,4 @@
-## StableSwap Curve NoOp Hook
+<h1>🦄 StableSwap Curve NoOp Hook 🦄 </h1>
 
 It is a NoOp hook that overrides the Uniswap V4 M's own logic including adding/removing liauidity and swap.
 
@@ -6,11 +6,11 @@ This solidity implementation utilizes **StableSwap** curve. More detail should b
 
 The features include:
 
-- Abillity to Ramping up or down A (**Amplification**) parameter by Admin to reflect the nature of highly correlated pairing assets ( e.g. stable coins or yield-bearing generating asset / undering assets ). This allows more efficient trading with lower slippage at greater volumn and market depth.
+- Ability to ramp up/down A (**Amplification**) parameter by admin to reflect the nature of highly correlated pairing assets ( e.g. stable coins or yield-bearing generating asset / undering assets ). This allows more efficient trading with lower slippage at greater volumn and deeper market depth.
 
 - Fungible token (ERC20) to represent the ownership of liquidity. Liquidity providers can mint/burn the lp token by adding/remove liquidity respevitively.
 
-- Abillity to configure swap fee.
+- Ability to configure swap fee.
 
 
 ### Quick Installation
