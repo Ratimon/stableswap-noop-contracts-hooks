@@ -87,7 +87,7 @@ contract DAMMTest is Test, Deployers {
             ZERO_BYTES
         );
 
-        // Add some initial liquidity
+        // Approve initial liquidity
         IERC20Minimal(Currency.unwrap(key.currency0)).approve(
             address(hook),
             type(uint).max
@@ -138,6 +138,12 @@ contract DAMMTest is Test, Deployers {
         assertEq(hook.getTokenBalance(0), 0e18);
         assertEq(hook.getTokenBalance(1), 0e18);
 
+        uint balanceOfToken0Before = hook.getToken(0).balanceOf(alice);
+        uint balanceOfToken1Before = hook.getToken(1).balanceOf(alice);
+        uint balanceOfLpTokenBefore = hook.getLpToken().balanceOf(alice);
+
+        assertEq(hook.getLpToken().totalSupply(), 0e18);
+        assertEq(balanceOfLpTokenBefore, 0e18);
 
         // We add 100 * (10^18) of liquidity of each token to the DAMM pool
         // The actual tokens will move into the PM But the hook should get equivalent amount of claim tokens for each token
@@ -160,6 +166,14 @@ contract DAMMTest is Test, Deployers {
 
         assertEq(hook.getTokenBalance(0), 100e18);
         assertEq(hook.getTokenBalance(1), 100e18);
+
+        uint balanceOfToken0After = hook.getToken(0).balanceOf(alice);
+        uint balanceOfToken1After = hook.getToken(1).balanceOf(alice);
+        uint balanceOfLpTokenAfter = hook.getLpToken().balanceOf(alice);
+
+        assertEq( balanceOfToken0Before - balanceOfToken0After ,  100e18 );
+        assertEq( balanceOfToken1Before - balanceOfToken1After , 100e18 );
+        assertEq( balanceOfLpTokenAfter  -  balanceOfLpTokenBefore, 200e18 );
 
         vm.stopPrank();
     }
